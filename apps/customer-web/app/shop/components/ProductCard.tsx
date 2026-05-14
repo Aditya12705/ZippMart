@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { RecommendationProduct } from "../lib/shopConfig";
 import { productPlaceholderDataUri } from "../lib/productPlaceholder";
+import { resolveProductImageUrl } from "../../../lib/productImage";
 
 export function ProductCard({
   product,
@@ -24,6 +25,9 @@ export function ProductCard({
   const d = product.discountPercent ?? 0;
   const onSale = d > 0;
   const list = product.listPrice ?? product.unitPrice;
+  const imageSrc = resolveProductImageUrl(product.imageUrl);
+  const [imgFailed, setImgFailed] = useState(false);
+  const showPlaceholder = !imageSrc || imgFailed;
 
   return (
     <article className={`productCard${onSale ? " productCard--sale" : ""}`}>
@@ -40,12 +44,17 @@ export function ProductCard({
         aria-label={`View ${product.name}`}
       >
         <div className="productCard__imageWrap">
-          {product.imageUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={product.imageUrl} alt="" className="productCard__image" />
-          ) : (
+          {showPlaceholder ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={productPlaceholderDataUri(product)} alt="" className="productCard__image productCard__image--ph" />
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={imageSrc}
+              alt=""
+              className="productCard__image"
+              onError={() => setImgFailed(true)}
+            />
           )}
         </div>
       </button>

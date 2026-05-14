@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { RecommendationProduct } from "../lib/shopConfig";
 import { productPlaceholderDataUri } from "../lib/productPlaceholder";
+import { resolveProductImageUrl } from "../../../lib/productImage";
 
 export function ProductPreviewModal({
   product,
@@ -20,10 +21,12 @@ export function ProductPreviewModal({
   onAdd: (barcode: string, qty: number) => void;
 }) {
   const [qty, setQty] = useState(1);
+  const [imgFailed, setImgFailed] = useState(false);
   const closeRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     setQty(1);
+    setImgFailed(false);
   }, [product?.id]);
 
   useEffect(() => {
@@ -39,6 +42,8 @@ export function ProductPreviewModal({
   if (!open || !product) return null;
   const barcode = product.barcode?.trim();
   const canAct = Boolean(barcode) && !disabled;
+  const imageSrc = resolveProductImageUrl(product.imageUrl);
+  const showPlaceholder = !imageSrc || imgFailed;
 
   return (
     <div className="productModal" role="dialog" aria-modal="true" aria-labelledby="productModalTitle">
@@ -48,12 +53,17 @@ export function ProductPreviewModal({
           ×
         </button>
         <div className="productModal__imageArea">
-          {product.imageUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={product.imageUrl} alt="" className="productModal__image" />
-          ) : (
+          {showPlaceholder ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={productPlaceholderDataUri(product)} alt="" className="productModal__image" />
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={imageSrc}
+              alt=""
+              className="productModal__image"
+              onError={() => setImgFailed(true)}
+            />
           )}
         </div>
         <div className="productModal__content">

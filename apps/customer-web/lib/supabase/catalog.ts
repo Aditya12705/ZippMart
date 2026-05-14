@@ -1,5 +1,6 @@
 import type { RecommendationProduct } from "../../app/shop/lib/shopConfig";
-import { apiBase } from "../../app/shop/lib/shopConfig";
+import { apiBase } from "../../lib/apiBase";
+import { resolveProductImageUrl } from "../../lib/productImage";
 import { getSupabaseBrowser } from "./browser";
 
 const DEFAULT_TABLE = "products";
@@ -25,7 +26,7 @@ function mapRow(row: CatalogRow): RecommendationProduct {
     name: String(row.name ?? ""),
     unitPrice: Number.isFinite(price) ? price : 0,
     category: row.category ?? undefined,
-    imageUrl: row.image_url?.trim() ? row.image_url.trim() : undefined
+    imageUrl: row.image_url?.trim() ? resolveProductImageUrl(row.image_url.trim()) : undefined
   };
 }
 
@@ -97,7 +98,7 @@ export async function fetchCatalogFromApi(q?: string): Promise<RecommendationPro
       taxPercent: p.taxPercent,
       inStock: p.inStock,
       demandScore: p.demandScore,
-      imageUrl: p.imageUrl?.trim() ? p.imageUrl.trim() : undefined
+      imageUrl: p.imageUrl?.trim() ? resolveProductImageUrl(p.imageUrl.trim()) : undefined
     }));
   } catch {
     return [];
