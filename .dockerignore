@@ -6,8 +6,6 @@ node_modules
 **/.env
 **/.env.local
 **/.env.*.local
-apps/admin-web
-apps/cashier-web
 services/worker
 infra
 *.md

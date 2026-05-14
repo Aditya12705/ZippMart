@@ -8,28 +8,30 @@ app_port: 7860
 pinned: false
 ---
 
-# ZippMart — Self-checkout demo
+# ZippMart — Full checkout platform
 
-Customer self-checkout shop backed by the ZippMart Express API and Supabase Postgres.
+All apps run in one Docker Space behind nginx on port **7860**.
 
-Open **/shop** after the Space finishes building.
+| App | URL |
+|-----|-----|
+| Customer shop | [/shop](https://adi576-zippmart.hf.space/shop) |
+| Admin HQ | [/admin](https://adi576-zippmart.hf.space/admin) |
+| Cashier terminal | [/cashier](https://adi576-zippmart.hf.space/cashier) |
+| API (proxied) | `/checkout-api` |
 
 ## Required secrets
-
-Set these in **Settings → Repository secrets** (or Space variables):
 
 | Variable | Description |
 |----------|-------------|
 | `DATABASE_URL` | Supabase pooler URI (port 6543) |
 | `JWT_SECRET` | Long random string |
-| `ADMIN_USERNAME` / `ADMIN_PASSWORD` | Staff login for admin (if deployed separately) |
+| `ADMIN_USERNAME` / `ADMIN_PASSWORD` | Staff login |
 | `MANAGER_USERNAME` / `MANAGER_PASSWORD` | Manager login |
 | `PUBLIC_API_URL` | `https://adi576-zippmart.hf.space/checkout-api` |
 
-Optional: `DEFAULT_STORE_CODE` (default `BLR001`), `CASHIER_API_KEY`, Razorpay / email webhooks.
+Optional: `DEFAULT_STORE_CODE`, `CASHIER_API_KEY` (+ same value as `NEXT_PUBLIC_CASHIER_API_KEY` at build if you protect cashier routes).
 
 ## Stack
 
-- **Frontend:** Next.js customer shop on port 7860
-- **API:** Express on internal port 4000, proxied at `/checkout-api`
-- **Database:** Supabase Postgres (run `supabase/migrations/20260513180000_checkout_mvp.sql` once)
+- **nginx** on 7860 routes traffic to three Next.js apps + Express API
+- **Database:** Supabase Postgres

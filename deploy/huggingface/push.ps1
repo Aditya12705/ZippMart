@@ -8,7 +8,7 @@ $SpaceUrl = "https://huggingface.co/spaces/ADI576/Zippmart"
 
 $SkipNames = @(
     ".git", "node_modules", ".next", "dist",
-    "admin-web", "cashier-web", "worker"
+    "worker"
 )
 
 $Token = $env:HF_TOKEN
@@ -40,7 +40,7 @@ Copy-Item "$Root\Dockerfile" (Join-Path $SpaceDir "Dockerfile") -Force
 Push-Location $SpaceDir
 git add -A
 if (-not (git diff --cached --quiet)) {
-    git commit -m "Deploy ZippMart customer shop + API (Docker Space)"
+    git commit -m "Deploy ZippMart shop, admin, cashier + API (Docker Space)"
 }
 git push
 Pop-Location
