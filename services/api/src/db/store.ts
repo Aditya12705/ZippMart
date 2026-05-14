@@ -399,6 +399,16 @@ export async function nextCounterToken(): Promise<number> {
   const { rows } = await getPool().query<{ next_value: number }>(
     "UPDATE app_counters SET next_value = next_value + 1 WHERE key = 'counter_token' RETURNING next_value"
   );
+  if (!rows[0]) {
+    await getPool().query(
+      "INSERT INTO app_counters (key, next_value) VALUES ('counter_token', 1000) ON CONFLICT (key) DO NOTHING"
+    );
+    const retry = await getPool().query<{ next_value: number }>(
+      "UPDATE app_counters SET next_value = next_value + 1 WHERE key = 'counter_token' RETURNING next_value"
+    );
+    if (!retry.rows[0]) throw new Error("Counter queue not configured");
+    return retry.rows[0].next_value;
+  }
   return rows[0].next_value;
 }
 

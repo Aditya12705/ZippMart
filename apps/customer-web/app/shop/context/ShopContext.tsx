@@ -260,7 +260,11 @@ export function ShopProvider({ children }: { children: ReactNode }) {
           return null;
         }
         if (!resp.ok) {
-          setMessage((data.message as string) ?? "Checkout failed");
+          const flat = data as { message?: string; fieldErrors?: Record<string, string[]> };
+          const fieldMsg = flat.fieldErrors
+            ? Object.values(flat.fieldErrors).flat().filter(Boolean).join(" ")
+            : "";
+          setMessage(flat.message ?? (fieldMsg || "Checkout failed — check receipt details or try again."));
           return null;
         }
         const result: CheckoutResult = {

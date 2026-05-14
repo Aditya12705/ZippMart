@@ -413,64 +413,76 @@ app.get("/v1/customer/cart/:sessionId", async (req, res) => {
 
 app.post("/v1/customer/checkout", async (req, res) => {
   const parsed = checkoutSchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json(parsed.error.flatten());
-  const session = await getSession(parsed.data.sessionId);
-  if (!session) return res.status(404).json({ message: "Session not found" });
-  const cart = await computeCart(session);
-  if (cart.items.length === 0) return res.status(400).json({ message: "Cart is empty" });
-
-  const lines: OrderLineSnapshot[] = cart.items.map((row) => {
-    const lineSubtotal = row.unitPrice * row.qty;
-    const lineTax = (lineSubtotal * row.taxPercent) / 100;
-    return {
-      productId: row.productId,
-      name: row.name,
-      qty: row.qty,
-      unitPrice: row.unitPrice,
-      taxPercent: row.taxPercent,
-      lineSubtotal,
-      lineTax,
-      lineTotal: lineSubtotal + lineTax
-    };
-  });
-
-  const orderId = randomUUID();
-  const order: Order = {
-    id: orderId,
-    sessionId: session.id,
-    storeCode: session.storeCode,
-    total: cart.grandTotal,
-    subtotal: cart.subtotal,
-    taxTotal: cart.taxTotal,
-    lines,
-    paymentMode: parsed.data.paymentMode,
-    paid: false,
-    createdAt: new Date().toISOString(),
-    voided: false,
-    refunded: false,
-    receiptEmail: parsed.data.receiptEmail ?? null,
-    receiptPhone: parsed.data.receiptPhone ?? null
-  };
-
-  if (parsed.data.paymentMode === "COUNTER") {
-    order.tokenNumber = await nextCounterToken();
+  if (!parsed.success) {
+    const message = parsed.error.issues.map((i) => i.message).join(" ") || "Invalid checkout request";
+    return res.status(400).json({ message, ...parsed.error.flatten() });
   }
+  try {
+    const session = await getSession(parsed.data.sessionId);
+    if (!session) return res.status(404).json({ message: "Session not found" });
+    const cart = await computeCart(session);
+    if (cart.items.length === 0) return res.status(400).json({ message: "Cart is empty" });
 
-  await createOrder(order);
+    const lines: OrderLineSnapshot[] = cart.items.map((row) => {
+      const lineSubtotal = row.unitPrice * row.qty;
+      const lineTax = (lineSubtotal * row.taxPercent) / 100;
+      return {
+        productId: row.productId,
+        name: row.name,
+        qty: row.qty,
+        unitPrice: row.unitPrice,
+        taxPercent: row.taxPercent,
+        lineSubtotal,
+        lineTax,
+        lineTotal: lineSubtotal + lineTax
+      };
+    });
 
-  if (parsed.data.paymentMode === "ONLINE") {
+    const orderId = randomUUID();
+    const order: Order = {
+      id: orderId,
+      sessionId: session.id,
+      storeCode: session.storeCode,
+      total: cart.grandTotal,
+      subtotal: cart.subtotal,
+      taxTotal: cart.taxTotal,
+      lines,
+      paymentMode: parsed.data.paymentMode,
+      paid: false,
+      createdAt: new Date().toISOString(),
+      voided: false,
+      refunded: false,
+      receiptEmail: parsed.data.receiptEmail ?? null,
+      receiptPhone: parsed.data.receiptPhone ?? null
+    };
+
+    if (parsed.data.paymentMode === "COUNTER") {
+      order.tokenNumber = await nextCounterToken();
+    }
+
+    await createOrder(order);
+
+    if (parsed.data.paymentMode === "ONLINE") {
+      return res.status(201).json({
+        orderId,
+        status: "PENDING_PAYMENT",
+        razorpayOrderId: process.env.RAZORPAY_KEY_ID ? `rzp_order_${orderId.replace(/-/g, "")}` : null
+      });
+    }
+
     return res.status(201).json({
       orderId,
-      status: "PENDING_PAYMENT",
-      razorpayOrderId: process.env.RAZORPAY_KEY_ID ? `rzp_order_${orderId.replace(/-/g, "")}` : null
+      status: "AWAITING_COUNTER_PAYMENT",
+      tokenNumber: order.tokenNumber
     });
+  } catch (e) {
+    console.error("checkout failed", e);
+    const detail = e instanceof Error ? e.message : String(e);
+    if (detail.includes("Unknown store")) {
+      return res.status(400).json({ message: "This store is not set up yet. Ask staff for help." });
+    }
+    return res.status(500).json({ message: "Checkout could not be completed. Please try again or pay at the counter." });
   }
-
-  return res.status(201).json({
-    orderId,
-    status: "AWAITING_COUNTER_PAYMENT",
-    tokenNumber: order.tokenNumber
-  });
 });
 
 app.get("/v1/cashier/orders/:orderId", requireCashierKey, async (req, res) => {

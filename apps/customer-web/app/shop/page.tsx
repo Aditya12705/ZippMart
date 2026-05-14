@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ProductCard } from "./components/ProductCard";
 import { ProductPreviewModal } from "./components/ProductPreviewModal";
 import { ProductRail } from "./components/ProductRail";
@@ -28,6 +28,7 @@ export default function ShopHomePage() {
   } = useShop();
   const [highDemand, setHighDemand] = useState<RecommendationProduct[]>([]);
   const [catalog, setCatalog] = useState<RecommendationProduct[]>([]);
+  const [catalogLoading, setCatalogLoading] = useState(true);
   const [catalogApiDown, setCatalogApiDown] = useState(false);
   const [category, setCategory] = useState("All");
   const [preview, setPreview] = useState<RecommendationProduct | null>(null);
@@ -38,32 +39,33 @@ export default function ShopHomePage() {
     setVisitPhone(localStorage.getItem("zippmart-visit-phone") ?? localStorage.getItem("supermart-visit-phone") ?? "");
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const health = await fetch(`${apiBase}/health`);
-        if (!health.ok) {
-          if (!cancelled) setCatalogApiDown(true);
-          return;
-        }
-        const [hd, all] = await Promise.all([fetchHighDemand(), fetchCatalogSample()]);
-        if (cancelled) return;
-        setHighDemand(hd);
-        setCatalog(all);
-        setCatalogApiDown(false);
-      } catch {
-        if (!cancelled) {
-          setCatalogApiDown(true);
-          setHighDemand([]);
-          setCatalog([]);
-        }
+  const loadCatalog = useCallback(async () => {
+    setCatalogLoading(true);
+    setCatalogApiDown(false);
+    try {
+      const health = await fetch(`${apiBase}/health`);
+      if (!health.ok) {
+        setCatalogApiDown(true);
+        setHighDemand([]);
+        setCatalog([]);
+        return;
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
+      const [hd, all] = await Promise.all([fetchHighDemand(), fetchCatalogSample()]);
+      setHighDemand(hd);
+      setCatalog(all);
+      setCatalogApiDown(false);
+    } catch {
+      setCatalogApiDown(true);
+      setHighDemand([]);
+      setCatalog([]);
+    } finally {
+      setCatalogLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void loadCatalog();
+  }, [loadCatalog]);
 
   const categories = useMemo(() => {
     const s = new Set<string>();
@@ -207,7 +209,7 @@ export default function ShopHomePage() {
         ) : showConnectionError ? (
           <div className="panel panel--warn">
             <p className="panel__title">Could not start your visit</p>
-            <p className="panel__text">{message || "Check that the checkout server is running."}</p>
+            <p className="panel__text">{message || "We could not connect to the store. Check your connection and try again."}</p>
             <button type="button" className="btnPrimary btnPrimary--full" disabled={loading} onClick={() => void retryConnect()}>
               {loading ? "Retrying…" : "Try again"}
             </button>
@@ -216,11 +218,11 @@ export default function ShopHomePage() {
 
         {catalogApiDown ? (
           <div className="panel panel--warn">
-            <p className="panel__title">Checkout server not reachable</p>
-            <p className="panel__text">
-              Start the API on port 4000 (<code>npm run dev</code> from the project root) and set <code>DATABASE_URL</code> in{" "}
-              <code>services/api/.env</code> to your Supabase connection string.
-            </p>
+            <p className="panel__title">Store temporarily unavailable</p>
+            <p className="panel__text">We could not load products right now. Please try again in a moment.</p>
+            <button type="button" className="btnGhost btnGhost--full" disabled={catalogLoading} onClick={() => void loadCatalog()}>
+              {catalogLoading ? "Loading…" : "Retry"}
+            </button>
           </div>
         ) : null}
 
@@ -240,6 +242,7 @@ export default function ShopHomePage() {
           </section>
         ) : null}
 
+        {!catalogApiDown ? (
         <section className="catalogSection">
           <div className="catalogSection__head">
             <h3 className="catalogSection__title">Shop by category</h3>
@@ -259,10 +262,12 @@ export default function ShopHomePage() {
               </button>
             ))}
           </div>
-          {catalog.length === 0 ? (
-            <p className="emptyCatalog">No products in the catalogue yet. Add your first SKU in the admin console (port 3002), then refresh this page.</p>
+          {catalogLoading ? (
+            <p className="emptyCatalog">Loading products…</p>
+          ) : catalog.length === 0 ? (
+            <p className="emptyCatalog">Nothing on the shelves yet — scan a barcode or check back soon.</p>
           ) : filtered.length === 0 ? (
-            <p className="emptyCatalog">No products in this category yet.</p>
+            <p className="emptyCatalog">No items in this category.</p>
           ) : (
             <div className="productGrid">
               {filtered.map((p) => (
@@ -278,6 +283,7 @@ export default function ShopHomePage() {
             </div>
           )}
         </section>
+        ) : null}
 
         {message && !showConnectionError ? <div className="toast">{message}</div> : null}
       </div>

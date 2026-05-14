@@ -31,6 +31,12 @@ export const setCartLineQtySchema = z.object({
 export const checkoutSchema = z.object({
   sessionId: z.string().uuid(),
   paymentMode: paymentModeSchema,
-  receiptEmail: z.string().email().optional(),
-  receiptPhone: z.string().min(8).max(20).optional()
+  receiptEmail: z.preprocess(
+    (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+    z.string().email().optional()
+  ),
+  receiptPhone: z.preprocess(
+    (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+    z.string().min(8).max(20).optional()
+  )
 });
