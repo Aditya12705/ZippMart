@@ -5,13 +5,7 @@ $Root = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 $SpaceDir = Join-Path $env:TEMP "zippmart-hf-cashier"
 $SpaceUrl = "https://huggingface.co/spaces/ADI576/Zippmart_Cashier"
 
-$IncludeNames = @(
-    "package.json",
-    "package-lock.json",
-    "tsconfig.base.json",
-    "apps",
-    "deploy"
-)
+$SkipNames = @(".git", "node_modules", ".next", "dist")
 
 $Token = $env:HF_TOKEN
 if (-not $Token) { $Token = $env:HUGGING_FACE_HUB_TOKEN }
@@ -22,31 +16,26 @@ if ($Token) {
 if (Test-Path $SpaceDir) { Remove-Item -Recurse -Force $SpaceDir }
 git clone $SpaceUrl $SpaceDir
 
-function Copy-Minimal($Source, $Dest) {
+function Copy-Tree($Source, $Dest) {
     New-Item -ItemType Directory -Force -Path $Dest | Out-Null
     Get-ChildItem $Source -Force | ForEach-Object {
-        if ($IncludeNames -notcontains $_.Name) { return }
+        if ($SkipNames -contains $_.Name) { return }
         $target = Join-Path $Dest $_.Name
-        if ($_.Name -eq "apps") {
-            Copy-Item (Join-Path $_.FullName "cashier-web") (Join-Path $target "cashier-web") -Recurse -Force
-            return
+        if ($_.PSIsContainer) {
+            Copy-Tree $_.FullName $target
+        } else {
+            Copy-Item $_.FullName $target -Force
         }
-        if ($_.Name -eq "deploy") {
-            New-Item -ItemType Directory -Force -Path $target | Out-Null
-            Copy-Item (Join-Path $_.FullName "huggingface-cashier") (Join-Path $target "huggingface-cashier") -Recurse -Force
-            return
-        }
-        Copy-Item $_.FullName $target -Recurse -Force
     }
 }
 
-Copy-Minimal $Root $SpaceDir
+New-Item -ItemType Directory -Force -Path (Join-Path $SpaceDir "apps") | Out-Null
+Copy-Tree (Join-Path $Root "apps\cashier-web") (Join-Path $SpaceDir "apps\cashier-web")
+New-Item -ItemType Directory -Force -Path (Join-Path $SpaceDir "deploy") | Out-Null
+Copy-Tree (Join-Path $Root "deploy\huggingface-cashier") (Join-Path $SpaceDir "deploy\huggingface-cashier")
 
-# Strip build artifacts from copied source
-$strip = @("node_modules", ".next", "dist")
-foreach ($name in $strip) {
-    $p = Join-Path $SpaceDir "apps\cashier-web\$name"
-    if (Test-Path $p) { Remove-Item -Recurse -Force $p }
+foreach ($file in @("package.json", "package-lock.json", "tsconfig.base.json")) {
+    Copy-Item (Join-Path $Root $file) (Join-Path $SpaceDir $file) -Force
 }
 
 Copy-Item "$Root\deploy\huggingface-cashier\README.md" (Join-Path $SpaceDir "README.md") -Force
