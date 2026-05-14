@@ -409,10 +409,15 @@ app.get("/v1/customer/recommendations", async (_req, res) => {
 });
 
 app.get("/v1/customer/products", async (req, res) => {
-  const query = String(req.query.q ?? "").toLowerCase();
+  const query = String(req.query.q ?? "").trim().toLowerCase();
   let products = await listProducts();
   if (query) {
-    products = products.filter((p) => p.name.toLowerCase().includes(query) || p.barcode.includes(query));
+    products = products.filter((p) => {
+      const name = p.name.toLowerCase();
+      const barcode = (p.barcode ?? "").toLowerCase();
+      const category = (p.category ?? "").toLowerCase();
+      return name.includes(query) || barcode.includes(query) || category.includes(query);
+    });
   }
   res.json(await Promise.all(products.map(toCustomerProduct)));
 });

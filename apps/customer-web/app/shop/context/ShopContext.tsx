@@ -11,6 +11,7 @@ import {
   type ReactNode
 } from "react";
 import { fetchCatalogUnified } from "../../../lib/supabase/catalog";
+import { resolveProductImageUrl } from "../../../lib/productImage";
 import { clearCartBackup, loadCartBackup, saveCartBackup } from "../../../lib/cartBackup";
 import {
   clearOfflineQueue,
@@ -577,7 +578,11 @@ export async function fetchHighDemand(): Promise<RecommendationProduct[]> {
     const resp = await fetch(`${apiBase}/v1/customer/recommendations`);
     if (!resp.ok) return [];
     const data = await resp.json();
-    return data.highDemand ?? [];
+    const rows = (data.highDemand ?? []) as RecommendationProduct[];
+    return rows.map((p) => ({
+      ...p,
+      imageUrl: p.imageUrl?.trim() ? resolveProductImageUrl(p.imageUrl.trim()) : undefined
+    }));
   } catch {
     return [];
   }

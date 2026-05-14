@@ -2,9 +2,11 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { fetchBrowseSuggestions } from "../../../lib/supabase/catalog";
+import { fetchBrowseSuggestions, fetchPopularProducts } from "../../../lib/supabase/catalog";
 import { ProductPreviewModal } from "../components/ProductPreviewModal";
 import { useShop, type RecommendationProduct } from "../context/ShopContext";
+import { productPlaceholderDataUri } from "../lib/productPlaceholder";
+import { resolveProductImageUrl } from "../../../lib/productImage";
 
 const SUGGEST_DEBOUNCE_MS = 240;
 
@@ -17,6 +19,8 @@ export default function SearchPage() {
   const [suggestLoading, setSuggestLoading] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   const [preview, setPreview] = useState<RecommendationProduct | null>(null);
+  const [popular, setPopular] = useState<RecommendationProduct[]>([]);
+  const [popularLoading, setPopularLoading] = useState(true);
   const wrapRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -24,6 +28,22 @@ export default function SearchPage() {
     if (!hydrated) return;
     if (!sessionId) router.replace("/shop");
   }, [hydrated, sessionId, router]);
+
+  useEffect(() => {
+    if (!hydrated || !sessionId) return;
+    let cancelled = false;
+    void (async () => {
+      setPopularLoading(true);
+      const items = await fetchPopularProducts(5);
+      if (!cancelled) {
+        setPopular(items);
+        setPopularLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [hydrated, sessionId]);
 
   useEffect(() => {
     if (!hydrated || !sessionId) return;
@@ -109,8 +129,7 @@ export default function SearchPage() {
     <>
       <main className="pageCanvas pageCanvas--browse">
         <p className="browseIntro">
-          Start typing a product name or barcode. We only show a short list of matches from what is available — nothing
-          loads until you search.
+          Search by product name, category, or barcode. Pick a match to view details and add to your bag.
         </p>
 
         <div className="searchWrap" ref={wrapRef}>
@@ -174,7 +193,40 @@ export default function SearchPage() {
         </div>
 
         {!trimmed ? (
-          <p className="browseHint">Your suggestions are pulled from the checkout catalogue and Supabase when configured.</p>
+          <section className="browsePopular" aria-label="Popular products">
+            <h3 className="browsePopular__title">Popular right now</h3>
+            {popularLoading ? (
+              <p className="browsePopular__loading">Loading picks…</p>
+            ) : popular.length === 0 ? (
+              <p className="browsePopular__empty">Start typing above to find products.</p>
+            ) : (
+              <ul className="browsePopular__list">
+                {popular.map((p) => {
+                  const imageSrc = resolveProductImageUrl(p.imageUrl);
+                  return (
+                    <li key={p.id}>
+                      <button type="button" className="browsePopular__row" onClick={() => pickProduct(p)}>
+                        <span className="browsePopular__thumb" aria-hidden>
+                          {imageSrc ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={imageSrc} alt="" className="browsePopular__img" />
+                          ) : (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={productPlaceholderDataUri(p)} alt="" className="browsePopular__img browsePopular__img--ph" />
+                          )}
+                        </span>
+                        <span className="browsePopular__body">
+                          <span className="browsePopular__name">{p.name}</span>
+                          {p.category ? <span className="browsePopular__meta">{p.category}</span> : null}
+                        </span>
+                        <span className="browsePopular__price">₹{p.unitPrice}</span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
         ) : null}
 
         {message ? <div className="toast">{message}</div> : null}

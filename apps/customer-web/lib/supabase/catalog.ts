@@ -56,7 +56,7 @@ export async function fetchCatalogFromSupabase(
     .limit(Math.min(Math.max(rowLimit, 1), 500));
 
   if (wild) {
-    q = q.or(`name.ilike.${wild},barcode.ilike.${wild}`);
+    q = q.or(`name.ilike.${wild},barcode.ilike.${wild},category.ilike.${wild}`);
   }
 
   const { data, error } = await q;
@@ -143,27 +143,33 @@ export async function fetchCatalogUnified(search?: string): Promise<Recommendati
   return mergeApiWithSupabase(apiRows, fromDb);
 }
 
-/** Typeahead only: no query → no rows. Merges API + Supabase like unified search, capped for UX. */
+/** Typeahead: API first; Supabase only if API returns nothing. */
 export async function fetchBrowseSuggestions(query: string, limit = 12): Promise<RecommendationProduct[]> {
   const t = query.trim();
   if (!t) return [];
 
-  const apiRows = await fetchCatalogFromApi(t);
-  const sb = getSupabaseBrowser();
   const cap = Math.min(Math.max(limit, 1), 40);
-
-  if (!sb) {
+  const apiRows = await fetchCatalogFromApi(t);
+  if (apiRows.length > 0) {
     return apiRows.slice(0, cap);
   }
 
-  const fromDb = await fetchCatalogFromSupabase(t, cap);
-  let merged: RecommendationProduct[];
-  if (apiRows.length === 0) {
-    merged = fromDb;
-  } else if (fromDb.length === 0) {
-    merged = apiRows;
-  } else {
-    merged = mergeApiWithSupabase(apiRows, fromDb);
+  const sb = getSupabaseBrowser();
+  if (!sb) return [];
+  return (await fetchCatalogFromSupabase(t, cap)).slice(0, cap);
+}
+
+/** Top products by demand score (shown on search idle state). */
+export async function fetchPopularProducts(limit = 5): Promise<RecommendationProduct[]> {
+  try {
+    const resp = await fetch(`${apiBase}/v1/customer/recommendations`);
+    if (!resp.ok) return [];
+    const data = (await resp.json()) as { highDemand?: RecommendationProduct[] };
+    return (data.highDemand ?? []).slice(0, limit).map((p) => ({
+      ...p,
+      imageUrl: p.imageUrl?.trim() ? resolveProductImageUrl(p.imageUrl.trim()) : undefined
+    }));
+  } catch {
+    return [];
   }
-  return merged.slice(0, cap);
 }
