@@ -1,0 +1,26 @@
+{
+  "name": "customer-web",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Customer self-checkout portal",
+  "scripts": {
+    "dev": "next dev -p 3001",
+    "build": "next build",
+    "start": "next start -p 3001",
+    "lint": "next lint",
+    "test": "node -e \"console.log('no tests yet')\""
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.1",
+    "html5-qrcode": "^2.3.8",
+    "next": "^16.2.6",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "supabase": "^2.98.2",
+    "typescript": "^6.0.3"
+  }
+}

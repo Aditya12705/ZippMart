@@ -1,0 +1,33 @@
+{
+  "name": "checkout-system",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ZippMart checkout platform monorepo",
+  "workspaces": [
+    "apps/*",
+    "services/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n api,worker,customer,admin,cashier -c blue,magenta,green,yellow,cyan \"npm run dev -w services/api\" \"npm run dev -w services/worker\" \"npm run dev -w apps/customer-web\" \"npm run dev -w apps/admin-web\" \"npm run dev -w apps/cashier-web\"",
+    "setup:api": "node -e \"const fs=require('fs');const p='services/api/.env';if(!fs.existsSync(p)){fs.copyFileSync('services/api/.env.example',p);console.log('Created',p,'— edit DATABASE_URL with your Supabase password');}else{console.log(p,'already exists');}\"",
+    "dev:customer": "npm run dev -w apps/customer-web",
+    "dev:admin": "npm run dev -w apps/admin-web",
+    "dev:cashier": "npm run dev -w apps/cashier-web",
+    "dev:api": "npm run dev -w services/api",
+    "dev:worker": "npm run dev -w services/worker",
+    "build": "npm run build -w @checkout/shared && npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces",
+    "lint": "npm run lint --workspaces"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.7.0",
+    "concurrently": "^9.2.1",
+    "eslint": "^10.3.0",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3"
+  }
+}

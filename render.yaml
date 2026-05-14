@@ -1,0 +1,32 @@
+# Render Blueprint — deploy the Express API (not suitable for Vercel serverless)
+# Docs: https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: zippmart-api
+    runtime: node
+    plan: free
+    rootDir: services/api
+    buildCommand: cd ../.. && npm ci && npm run build -w @checkout/shared && npm run build -w api
+    startCommand: cd ../.. && npm run start -w api
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 4000
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ADMIN_USERNAME
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: MANAGER_USERNAME
+        sync: false
+      - key: MANAGER_PASSWORD
+        sync: false
+      - key: DEFAULT_STORE_CODE
+        value: BLR001
+      - key: PUBLIC_API_URL
+        sync: false
