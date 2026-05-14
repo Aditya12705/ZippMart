@@ -14,6 +14,7 @@ export function BarcodeCameraScanner({ active, onClose, onDecoded }: Props) {
   const scannerRef = useRef<import("html5-qrcode").Html5Qrcode | null>(null);
   const onDecodedRef = useRef(onDecoded);
   const lastRef = useRef<{ text: string; at: number }>({ text: "", at: 0 });
+  const consumedRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
 
@@ -40,9 +41,11 @@ export function BarcodeCameraScanner({ active, onClose, onDecoded }: Props) {
       void stopScanner();
       setError(null);
       setStarting(false);
+      consumedRef.current = false;
       return;
     }
 
+    consumedRef.current = false;
     let cancelled = false;
     setStarting(true);
     setError(null);
@@ -95,7 +98,7 @@ export function BarcodeCameraScanner({ active, onClose, onDecoded }: Props) {
         await html5.start(
           { facingMode: "environment" },
           {
-            fps: 8,
+            fps: 6,
             qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
               const w = Math.min(320, Math.floor(viewfinderWidth * 0.92));
               const h = Math.min(220, Math.floor(viewfinderHeight * 0.42));
@@ -105,10 +108,14 @@ export function BarcodeCameraScanner({ active, onClose, onDecoded }: Props) {
             videoConstraints: { facingMode: { ideal: "environment" } }
           },
           (decodedText) => {
+            if (consumedRef.current) return;
             const now = Date.now();
-            if (decodedText === lastRef.current.text && now - lastRef.current.at < 2200) return;
+            if (decodedText === lastRef.current.text && now - lastRef.current.at < 8000) return;
+            consumedRef.current = true;
             lastRef.current = { text: decodedText, at: now };
-            onDecodedRef.current(decodedText);
+            void stopScanner().then(() => {
+              onDecodedRef.current(decodedText);
+            });
           },
           () => undefined
         );
@@ -141,6 +148,7 @@ export function BarcodeCameraScanner({ active, onClose, onDecoded }: Props) {
           type="button"
           className="scanCamera__close"
           onClick={() => {
+            consumedRef.current = true;
             void stopScanner().then(onClose);
           }}
         >

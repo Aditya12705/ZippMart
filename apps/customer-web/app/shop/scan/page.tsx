@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { BarcodeCameraScanner } from "../components/BarcodeCameraScanner";
 import { useShop } from "../context/ShopContext";
 
@@ -12,6 +12,8 @@ export default function ScanPage() {
   const [code, setCode] = useState("");
   const [cameraOn, setCameraOn] = useState(false);
   const [qty, setQty] = useState(1);
+  const [lastAdded, setLastAdded] = useState<string | null>(null);
+  const submitLock = useRef(false);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -31,15 +33,25 @@ export default function ScanPage() {
   }
 
   async function submit(text?: string) {
+    if (submitLock.current) return;
     const trimmed = (text ?? code).trim();
     if (!trimmed) {
       setMessage("Enter or scan a barcode");
       return;
     }
-    const ok = await addToCart(trimmed, qty);
-    if (ok) {
-      setCode("");
-      setQty(1);
+    submitLock.current = true;
+    setCameraOn(false);
+    try {
+      const ok = await addToCart(trimmed, qty);
+      if (ok) {
+        setLastAdded(trimmed);
+        setCode("");
+        setQty(1);
+      } else if (text) {
+        setCode(trimmed);
+      }
+    } finally {
+      submitLock.current = false;
     }
   }
 
@@ -48,13 +60,13 @@ export default function ScanPage() {
       <section className="scanIntro">
         <p className="scanIntro__eyebrow">Barcode</p>
         <h2 className="scanIntro__title">Point & add</h2>
-        <p className="scanIntro__text">Align the code in the frame. You can also type it below.</p>
+        <p className="scanIntro__text">One beep per scan — camera closes after each item. Tap scan again for the next.</p>
       </section>
 
       <section className="scanActions">
         {!cameraOn ? (
           <button type="button" className="btnPrimary btnPrimary--full" onClick={() => setCameraOn(true)} disabled={loading}>
-            Open camera
+            {lastAdded ? "Scan another item" : "Open camera"}
           </button>
         ) : null}
       </section>
