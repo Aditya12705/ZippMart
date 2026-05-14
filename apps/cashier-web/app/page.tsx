@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { apiBase, cashierHeaders } from "../lib/api";
 const RECENT_KEY = "zippmart-cashier-recent";
 const MAX_RECENT = 8;
@@ -197,6 +198,9 @@ export default function CashierHomePage() {
         <p className="header__sub">
           Look up queue tokens or order IDs, verify the basket, then settle cash or card at the till.
         </p>
+        <Link href="/gate" className="gateBack">
+          Exit gate scanner →
+        </Link>
       </header>
 
       {stats ? (

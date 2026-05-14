@@ -22,7 +22,7 @@ async function copyToClipboard(text: string): Promise<boolean> {
 
 export default function CheckoutPage() {
   const router = useRouter();
-  const { hydrated, sessionId, cart, refreshCart, loading, checkout, message, setMessage } = useShop();
+  const { hydrated, sessionId, cart, refreshCart, loading, checkout, message, setMessage, clearSession } = useShop();
   const [result, setResult] = useState<CheckoutResult | null>(null);
   const [cartSynced, setCartSynced] = useState(false);
   const [receiptEmail, setReceiptEmail] = useState("");
@@ -108,6 +108,11 @@ export default function CheckoutPage() {
     } finally {
       setExitLoading(false);
     }
+  }
+
+  function startNewVisit() {
+    clearSession();
+    router.push("/shop");
   }
 
   async function pay(mode: "ONLINE" | "COUNTER") {
@@ -213,9 +218,9 @@ export default function CheckoutPage() {
             <img src={exitPass.exitQr} alt="Exit gate QR code" className="exitPass__qr" width={220} height={220} />
           </div>
           <p className="exitPass__hint">Valid for 15 minutes · one scan at the gate</p>
-          <Link href="/shop" className="btnPrimary btnPrimary--full checkoutResult__done">
+          <button type="button" className="btnPrimary btnPrimary--full checkoutResult__done" onClick={startNewVisit}>
             Done · shop again
-          </Link>
+          </button>
         </section>
       ) : showReceipt && paidReceipt ? (
         <section className="eReceipt">

@@ -243,8 +243,13 @@ async function sendReceiptEmail(order: Order, receiptNumber: string): Promise<bo
         html: receiptEmailHtml(order, receiptNumber)
       })
     });
+    if (!resp.ok) {
+      const detail = await resp.text().catch(() => "");
+      console.error("Resend API error", resp.status, detail);
+    }
     return resp.ok;
-  } catch {
+  } catch (e) {
+    console.error("receipt email failed", e);
     return false;
   }
 }
@@ -511,6 +516,9 @@ app.post("/v1/customer/checkout", async (req, res) => {
     }
 
     await createOrder(order);
+
+    session.cart.clear();
+    await saveSessionCart(session.id, session.cart);
 
     if (parsed.data.paymentMode === "ONLINE") {
       return res.status(201).json({
