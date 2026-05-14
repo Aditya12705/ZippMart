@@ -1,4 +1,5 @@
-const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
+export const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000").replace(/\/$/, "");
+
 const cashierKey = process.env.NEXT_PUBLIC_CASHIER_API_KEY ?? "";
 
 export function cashierHeaders(json = false): HeadersInit {
@@ -7,5 +8,3 @@ export function cashierHeaders(json = false): HeadersInit {
   if (cashierKey) h["X-Cashier-Key"] = cashierKey;
   return h;
 }
-
-export { apiBase };

@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { getAdminToken, setAdminSession } from "../../lib/adminAuth";
 
-const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
+import { apiBase } from "../../lib/api";
 
 export default function AdminLoginPage() {
   const router = useRouter();

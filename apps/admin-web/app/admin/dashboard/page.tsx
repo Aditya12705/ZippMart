@@ -6,7 +6,7 @@ import { BarcodeCameraScanner } from "../../components/BarcodeCameraScanner";
 import { StockAdjustModal } from "../../components/StockAdjustModal";
 import { adminFetchHeaders, clearAdminToken, getAdminRole, getAdminToken } from "../../../lib/adminAuth";
 
-const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
+import { apiBase } from "../../../lib/api";
 
 const CATEGORY_OPTIONS = [
   "General",
