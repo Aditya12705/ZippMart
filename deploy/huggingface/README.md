@@ -5,6 +5,7 @@ colorFrom: green
 colorTo: blue
 sdk: docker
 app_port: 7860
+health_check: /health
 pinned: false
 ---
 
