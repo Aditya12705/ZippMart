@@ -4,13 +4,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { apiBase, useShop, type CheckoutResult } from "../context/ShopContext";
+import { downloadReceiptHtml, type PaidReceipt } from "../lib/receiptDownload";
 
 type ExitPass = {
   exitQr: string;
   grandTotal: number;
-  receiptEmail: string | null;
-  receiptPhone: string | null;
-  receiptDelivery: "webhook" | "none";
 };
 
 async function copyToClipboard(text: string): Promise<boolean> {
@@ -28,15 +26,16 @@ export default function CheckoutPage() {
   const [result, setResult] = useState<CheckoutResult | null>(null);
   const [cartSynced, setCartSynced] = useState(false);
   const [receiptEmail, setReceiptEmail] = useState("");
-  const [receiptPhone, setReceiptPhone] = useState("");
   const [counterSnapshot, setCounterSnapshot] = useState<{
     subtotal: number;
     tax: number;
     total: number;
   } | null>(null);
   const [copyHint, setCopyHint] = useState("");
+  const [paidReceipt, setPaidReceipt] = useState<PaidReceipt | null>(null);
   const [exitPass, setExitPass] = useState<ExitPass | null>(null);
   const [waitingPayment, setWaitingPayment] = useState(false);
+  const [exitLoading, setExitLoading] = useState(false);
 
   const flashCopy = useCallback((ok: boolean) => {
     setCopyHint(ok ? "Copied to clipboard" : "Could not copy — select text manually");
@@ -64,24 +63,24 @@ export default function CheckoutPage() {
     let cancelled = false;
     setWaitingPayment(true);
 
-    const loadExit = async () => {
-      const resp = await fetch(`${apiBase}/v1/customer/orders/${encodeURIComponent(result.orderId)}/exit-pass`);
+    const loadReceipt = async () => {
+      const resp = await fetch(`${apiBase}/v1/customer/orders/${encodeURIComponent(result.orderId)}/receipt`);
       if (!resp.ok) return false;
-      const data = (await resp.json()) as ExitPass;
+      const data = (await resp.json()) as PaidReceipt;
       if (!cancelled) {
-        setExitPass(data);
+        setPaidReceipt(data);
         setWaitingPayment(false);
       }
       return true;
     };
 
     const tick = async () => {
-      if (cancelled) return;
+      if (cancelled || paidReceipt) return;
       const statusResp = await fetch(`${apiBase}/v1/customer/orders/${encodeURIComponent(result.orderId)}`);
       if (!statusResp.ok) return;
       const status = (await statusResp.json()) as { paid: boolean };
       if (status.paid) {
-        await loadExit();
+        await loadReceipt();
       }
     };
 
@@ -91,7 +90,25 @@ export default function CheckoutPage() {
       cancelled = true;
       window.clearInterval(id);
     };
-  }, [result?.orderId, result?.tokenNumber]);
+  }, [result?.orderId, result?.tokenNumber, paidReceipt]);
+
+  async function continueToExit() {
+    if (!result?.orderId) return;
+    setExitLoading(true);
+    try {
+      const resp = await fetch(`${apiBase}/v1/customer/orders/${encodeURIComponent(result.orderId)}/exit-pass`);
+      if (!resp.ok) {
+        setMessage("Could not load exit pass. Try again.");
+        return;
+      }
+      const data = (await resp.json()) as ExitPass;
+      setExitPass(data);
+    } catch {
+      setMessage("Could not load exit pass.");
+    } finally {
+      setExitLoading(false);
+    }
+  }
 
   async function pay(mode: "ONLINE" | "COUNTER") {
     if (mode === "ONLINE") {
@@ -100,11 +117,11 @@ export default function CheckoutPage() {
     }
     const snap = { subtotal: cart.subtotal, tax: cart.taxTotal, total: cart.grandTotal };
     const r = await checkout(mode, {
-      receiptEmail: receiptEmail.trim() || undefined,
-      receiptPhone: receiptPhone.trim() || undefined
+      receiptEmail: receiptEmail.trim() || undefined
     });
     setResult(r);
     setCounterSnapshot(r ? snap : null);
+    setPaidReceipt(null);
     setExitPass(null);
     setWaitingPayment(Boolean(r?.tokenNumber != null));
     if (r) void refreshCart();
@@ -120,6 +137,7 @@ export default function CheckoutPage() {
 
   const isCounter = result?.tokenNumber != null;
   const showExit = isCounter && exitPass != null;
+  const showReceipt = isCounter && paidReceipt != null && !showExit;
 
   return (
     <main className="pageCanvas pageCanvas--checkout">
@@ -155,10 +173,9 @@ export default function CheckoutPage() {
           </section>
 
           <section className="checkoutReceiptOpts" aria-label="Receipt options">
-            <p className="checkoutReceiptOpts__label">E-receipt (optional)</p>
+            <p className="checkoutReceiptOpts__label">Email receipt (optional)</p>
             <p className="checkoutReceiptOpts__hint">
-              We save your contact details on the order. After the cashier confirms payment, the store can send a
-              receipt by email or WhatsApp if that service is enabled on the backend.
+              We&apos;ll email a copy after the cashier confirms payment, if the store has email delivery enabled.
             </p>
             <label className="checkoutReceiptOpts__field">
               <span>Email</span>
@@ -168,16 +185,6 @@ export default function CheckoutPage() {
                 placeholder="you@example.com"
                 value={receiptEmail}
                 onChange={(e) => setReceiptEmail(e.target.value)}
-              />
-            </label>
-            <label className="checkoutReceiptOpts__field">
-              <span>Phone (WhatsApp)</span>
-              <input
-                type="tel"
-                autoComplete="tel"
-                placeholder="10-digit mobile"
-                value={receiptPhone}
-                onChange={(e) => setReceiptPhone(e.target.value)}
               />
             </label>
           </section>
@@ -206,22 +213,53 @@ export default function CheckoutPage() {
             <img src={exitPass.exitQr} alt="Exit gate QR code" className="exitPass__qr" width={220} height={220} />
           </div>
           <p className="exitPass__hint">Valid for 15 minutes · one scan at the gate</p>
-          <div className="checkoutBill checkoutBill--compact">
-            <div className="checkoutBill__row checkoutBill__row--total">
-              <span>Paid</span>
-              <span>₹{exitPass.grandTotal.toFixed(2)}</span>
-            </div>
-          </div>
-          {exitPass.receiptEmail || exitPass.receiptPhone ? (
-            <p className="exitPass__receipt">
-              {exitPass.receiptDelivery === "webhook"
-                ? `Receipt queued for ${exitPass.receiptEmail ?? exitPass.receiptPhone}.`
-                : "Receipt contact saved — ask staff if you do not receive it (store webhook not configured)."}
-            </p>
-          ) : null}
           <Link href="/shop" className="btnPrimary btnPrimary--full checkoutResult__done">
             Done · shop again
           </Link>
+        </section>
+      ) : showReceipt && paidReceipt ? (
+        <section className="eReceipt">
+          <p className="counterSuccess__eyebrow">Payment confirmed</p>
+          <h2 className="eReceipt__title">Your receipt</h2>
+          <p className="eReceipt__meta">
+            {paidReceipt.receiptNumber} · {paidReceipt.storeCode}
+          </p>
+          <div className="eReceipt__card checkoutBill">
+            <ul className="checkoutBill__items">
+              {paidReceipt.lines.map((line) => (
+                <li key={`${line.name}-${line.qty}`}>
+                  <span>
+                    {line.name} × {line.qty}
+                  </span>
+                  <span>₹{line.lineTotal.toFixed(2)}</span>
+                </li>
+              ))}
+            </ul>
+            <div className="checkoutBill__divider" />
+            <div className="checkoutBill__row">
+              <span>Subtotal</span>
+              <span>₹{paidReceipt.subtotal.toFixed(2)}</span>
+            </div>
+            <div className="checkoutBill__row">
+              <span>Tax</span>
+              <span>₹{paidReceipt.taxTotal.toFixed(2)}</span>
+            </div>
+            <div className="checkoutBill__row checkoutBill__row--total">
+              <span>Total paid</span>
+              <span>₹{paidReceipt.grandTotal.toFixed(2)}</span>
+            </div>
+          </div>
+          {paidReceipt.receiptEmail && paidReceipt.emailConfigured ? (
+            <p className="eReceipt__emailNote">A copy is being sent to {paidReceipt.receiptEmail}.</p>
+          ) : paidReceipt.receiptEmail ? (
+            <p className="eReceipt__emailNote">Email saved — on-screen receipt is your copy for now.</p>
+          ) : null}
+          <button type="button" className="btnGhost btnGhost--full" onClick={() => downloadReceiptHtml(paidReceipt)}>
+            Download receipt
+          </button>
+          <button type="button" className="btnPrimary btnPrimary--full" disabled={exitLoading} onClick={() => void continueToExit()}>
+            {exitLoading ? "Loading exit pass…" : "Continue to exit gate"}
+          </button>
         </section>
       ) : isCounter ? (
         <section className="counterSuccess">
@@ -241,7 +279,7 @@ export default function CheckoutPage() {
           </div>
           <p className="counterSuccess__hint">
             {waitingPayment
-              ? "Waiting for the cashier to confirm payment… This screen will show your exit QR automatically."
+              ? "Waiting for the cashier to confirm payment…"
               : "Show this screen to the cashier so they can pull up your order."}
           </p>
           {counterSnapshot ? (
@@ -263,15 +301,6 @@ export default function CheckoutPage() {
           <div className="counterSuccess__orderRef">
             <span className="counterSuccess__orderLabel">Order reference</span>
             <code className="counterSuccess__orderId">{result.orderId}</code>
-          </div>
-          <div className="copyRow">
-            <button
-              type="button"
-              className="btnGhost btnGhost--full"
-              onClick={() => void copyToClipboard(result.orderId).then((ok) => flashCopy(ok))}
-            >
-              Copy order ID
-            </button>
           </div>
           {copyHint ? <p className="copyHint">{copyHint}</p> : null}
           {waitingPayment ? <p className="inlineNotice inlineNotice--pulse">Checking payment status…</p> : null}

@@ -24,6 +24,7 @@ import {
   getMetrics,
   getOrder,
   getOrderByToken,
+  getReceiptByOrderId,
   getSession,
   incrementStock,
   insertReceipt,
@@ -64,6 +65,8 @@ app.use((req, _res, next) => {
 });
 
 const receiptNotifyWebhook = process.env.RECEIPT_NOTIFY_WEBHOOK_URL?.trim();
+const resendApiKey = process.env.RESEND_API_KEY?.trim();
+const emailFrom = process.env.EMAIL_FROM?.trim();
 const lowStockNotifyWebhook = process.env.LOW_STOCK_NOTIFY_WEBHOOK_URL?.trim();
 const port = Number(process.env.PORT ?? 4000);
 const isProd = process.env.NODE_ENV === "production";
@@ -199,12 +202,50 @@ async function notifyReceiptWebhook(order: Order) {
         total: order.total,
         storeCode: order.storeCode,
         receiptEmail: order.receiptEmail ?? null,
-        receiptPhone: order.receiptPhone ?? null,
         lines: order.lines.map((l) => ({ name: l.name, qty: l.qty, lineTotal: l.lineTotal }))
       })
     });
   } catch {
     await pushAudit("receipt", "system", "receipt.webhook.fail", order.id);
+  }
+}
+
+function receiptEmailHtml(order: Order, receiptNumber: string): string {
+  const rows = order.lines
+    .map(
+      (l) =>
+        `<tr><td>${l.name}</td><td align="right">${l.qty}</td><td align="right">₹${l.lineTotal.toFixed(2)}</td></tr>`
+    )
+    .join("");
+  return `<!DOCTYPE html><html><body style="font-family:sans-serif;color:#111">
+<h2>ZippMart receipt</h2>
+<p><strong>${receiptNumber}</strong> · ${order.storeCode}</p>
+<table cellpadding="6" cellspacing="0" border="0">${rows}</table>
+<p>Subtotal: ₹${order.subtotal.toFixed(2)}<br>Tax: ₹${order.taxTotal.toFixed(2)}<br><strong>Total: ₹${order.total.toFixed(2)}</strong></p>
+<p>Thank you for shopping with ZippMart.</p>
+</body></html>`;
+}
+
+async function sendReceiptEmail(order: Order, receiptNumber: string): Promise<boolean> {
+  const to = order.receiptEmail?.trim();
+  if (!resendApiKey || !emailFrom || !to) return false;
+  try {
+    const resp = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${resendApiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        from: emailFrom,
+        to: [to],
+        subject: `Your ZippMart receipt ${receiptNumber}`,
+        html: receiptEmailHtml(order, receiptNumber)
+      })
+    });
+    return resp.ok;
+  } catch {
+    return false;
   }
 }
 
@@ -215,16 +256,20 @@ async function recordPaidOrder(order: Order, whatsapp: string | null, auditActor
   await updateOrderPaid(order.id, true);
   order.paid = true;
   const receiptId = `rcpt_${Date.now()}`;
+  const receiptNumber = `SM-${Date.now()}`;
   await insertReceipt({
     id: receiptId,
     orderId: order.id,
-    receiptNumber: `SM-${Date.now()}`,
+    receiptNumber,
     total: order.total,
     paymentMode: order.paymentMode,
-    whatsapp
+    whatsapp: null
   });
   await pushAudit(auditActor, auditRole, "order.settled", order.id);
   void notifyReceiptWebhook(order);
+  void sendReceiptEmail(order, receiptNumber).then((ok) => {
+    if (ok) void pushAudit("receipt", "system", "receipt.email.sent", order.id);
+  });
   return receiptId;
 }
 
@@ -505,6 +550,36 @@ app.get("/v1/customer/orders/:orderId", async (req, res) => {
   });
 });
 
+app.get("/v1/customer/orders/:orderId/receipt", async (req, res) => {
+  const order = await getOrder(pathParam(req.params.orderId));
+  if (!order || order.voided) return res.status(404).json({ message: "Order not found" });
+  if (!order.paid) {
+    return res.status(402).json({ message: "Payment not confirmed yet", paid: false });
+  }
+  const rec = await getReceiptByOrderId(order.id);
+  const emailConfigured = Boolean(resendApiKey && emailFrom);
+  return res.json({
+    receiptNumber: rec?.receiptNumber ?? `ORD-${order.id.slice(0, 8)}`,
+    orderId: order.id,
+    storeCode: order.storeCode,
+    createdAt: rec?.createdAt ?? order.createdAt,
+    paymentMode: order.paymentMode,
+    lines: order.lines.map((l) => ({
+      name: l.name,
+      qty: l.qty,
+      unitPrice: l.unitPrice,
+      taxPercent: l.taxPercent,
+      lineTotal: l.lineTotal
+    })),
+    subtotal: order.subtotal,
+    taxTotal: order.taxTotal,
+    grandTotal: order.total,
+    receiptEmail: order.receiptEmail ?? null,
+    emailConfigured,
+    tokenNumber: order.tokenNumber ?? null
+  });
+});
+
 app.get("/v1/customer/orders/:orderId/exit-pass", async (req, res) => {
   const order = await getOrder(pathParam(req.params.orderId));
   if (!order || order.voided) return res.status(404).json({ message: "Order not found" });
@@ -521,10 +596,7 @@ app.get("/v1/customer/orders/:orderId/exit-pass", async (req, res) => {
     paid: true,
     orderId: order.id,
     exitQr,
-    grandTotal: order.total,
-    receiptEmail: order.receiptEmail ?? null,
-    receiptPhone: order.receiptPhone ?? null,
-    receiptDelivery: receiptNotifyWebhook ? "webhook" : "none"
+    grandTotal: order.total
   });
 });
 

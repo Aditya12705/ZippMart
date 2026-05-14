@@ -1925,6 +1925,44 @@ a {
   padding: 16px;
 }
 
+.eReceipt {
+  text-align: center;
+}
+
+.eReceipt__title {
+  margin: 0 0 8px;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--olive-dark);
+}
+
+.eReceipt__meta {
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.eReceipt__card {
+  text-align: left;
+  margin-bottom: 16px;
+  padding: 16px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.eReceipt__emailNote {
+  margin: 0 0 14px;
+  font-size: 13px;
+  color: var(--olive-dark);
+  line-height: 1.45;
+}
+
+.eReceipt .btnGhost,
+.eReceipt .btnPrimary {
+  margin-top: 10px;
+}
+
 .exitPass__title {
   margin: 0 0 16px;
   font-size: 1.2rem;

@@ -450,6 +450,25 @@ export async function listReceipts() {
   }));
 }
 
+export async function getReceiptByOrderId(orderId: string) {
+  const { rows } = await getPool().query<{
+    receipt_number: string;
+    total: string;
+    payment_mode: string;
+    created_at: Date;
+  }>("SELECT receipt_number, total, payment_mode, created_at FROM receipts WHERE order_id = $1 ORDER BY created_at DESC LIMIT 1", [
+    orderId
+  ]);
+  const row = rows[0];
+  if (!row) return null;
+  return {
+    receiptNumber: row.receipt_number,
+    total: Number(row.total),
+    paymentMode: row.payment_mode,
+    createdAt: new Date(row.created_at).toISOString()
+  };
+}
+
 export async function markExitTokenUsed(tokenHash: string): Promise<void> {
   await getPool().query(
     "INSERT INTO exit_tokens_used (token_hash) VALUES ($1) ON CONFLICT DO NOTHING",
