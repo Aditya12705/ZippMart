@@ -1925,6 +1925,63 @@ a {
   padding: 16px;
 }
 
+.exitPass__title {
+  margin: 0 0 16px;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--olive-dark);
+}
+
+.exitPass__qrWrap {
+  display: inline-block;
+  padding: 12px;
+  border-radius: var(--radius);
+  background: #fff;
+  border: 2px solid var(--line);
+  box-shadow: var(--shadow);
+}
+
+.exitPass__qr {
+  display: block;
+  width: 220px;
+  height: 220px;
+}
+
+.exitPass__hint {
+  margin: 14px 0 18px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.exitPass__receipt {
+  margin: 0 0 18px;
+  font-size: 13px;
+  color: var(--olive-dark);
+  line-height: 1.45;
+  max-width: 36ch;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.btnGhost--disabledLook {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.inlineNotice--pulse {
+  animation: pulseNotice 1.6s ease-in-out infinite;
+}
+
+@keyframes pulseNotice {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
 .counterSuccess {
   text-align: center;
 }

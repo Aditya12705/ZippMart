@@ -485,6 +485,49 @@ app.post("/v1/customer/checkout", async (req, res) => {
   }
 });
 
+app.get("/v1/customer/orders/:orderId", async (req, res) => {
+  const order = await getOrder(pathParam(req.params.orderId));
+  if (!order || order.voided) return res.status(404).json({ message: "Order not found" });
+  const status = order.paid
+    ? "PAID"
+    : order.paymentMode === "COUNTER"
+      ? "AWAITING_COUNTER_PAYMENT"
+      : "PENDING_PAYMENT";
+  return res.json({
+    orderId: order.id,
+    paid: order.paid,
+    paymentMode: order.paymentMode,
+    tokenNumber: order.tokenNumber ?? null,
+    status,
+    grandTotal: order.total,
+    subtotal: order.subtotal,
+    taxTotal: order.taxTotal
+  });
+});
+
+app.get("/v1/customer/orders/:orderId/exit-pass", async (req, res) => {
+  const order = await getOrder(pathParam(req.params.orderId));
+  if (!order || order.voided) return res.status(404).json({ message: "Order not found" });
+  if (!order.paid) {
+    return res.status(402).json({
+      message: "Payment not confirmed yet",
+      paid: false,
+      tokenNumber: order.tokenNumber ?? null
+    });
+  }
+  const token = jwt.sign({ orderId: order.id, exp: Math.floor(Date.now() / 1000) + 15 * 60 }, jwtSecret!);
+  const exitQr = await QRCode.toDataURL(token);
+  return res.json({
+    paid: true,
+    orderId: order.id,
+    exitQr,
+    grandTotal: order.total,
+    receiptEmail: order.receiptEmail ?? null,
+    receiptPhone: order.receiptPhone ?? null,
+    receiptDelivery: receiptNotifyWebhook ? "webhook" : "none"
+  });
+});
+
 app.get("/v1/cashier/orders/:orderId", requireCashierKey, async (req, res) => {
   const order = await getOrder(pathParam(req.params.orderId));
   if (!order || order.voided) return res.status(404).json({ message: "Order not found" });

@@ -3,7 +3,15 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { useShop, type CheckoutResult } from "../context/ShopContext";
+import { apiBase, useShop, type CheckoutResult } from "../context/ShopContext";
+
+type ExitPass = {
+  exitQr: string;
+  grandTotal: number;
+  receiptEmail: string | null;
+  receiptPhone: string | null;
+  receiptDelivery: "webhook" | "none";
+};
 
 async function copyToClipboard(text: string): Promise<boolean> {
   try {
@@ -16,7 +24,7 @@ async function copyToClipboard(text: string): Promise<boolean> {
 
 export default function CheckoutPage() {
   const router = useRouter();
-  const { hydrated, sessionId, cart, refreshCart, loading, checkout, message } = useShop();
+  const { hydrated, sessionId, cart, refreshCart, loading, checkout, message, setMessage } = useShop();
   const [result, setResult] = useState<CheckoutResult | null>(null);
   const [cartSynced, setCartSynced] = useState(false);
   const [receiptEmail, setReceiptEmail] = useState("");
@@ -27,6 +35,8 @@ export default function CheckoutPage() {
     total: number;
   } | null>(null);
   const [copyHint, setCopyHint] = useState("");
+  const [exitPass, setExitPass] = useState<ExitPass | null>(null);
+  const [waitingPayment, setWaitingPayment] = useState(false);
 
   const flashCopy = useCallback((ok: boolean) => {
     setCopyHint(ok ? "Copied to clipboard" : "Could not copy — select text manually");
@@ -49,15 +59,54 @@ export default function CheckoutPage() {
     }
   }, [cartSynced, cart.items.length, result, router]);
 
+  useEffect(() => {
+    if (!result?.orderId || result.tokenNumber == null) return;
+    let cancelled = false;
+    setWaitingPayment(true);
+
+    const loadExit = async () => {
+      const resp = await fetch(`${apiBase}/v1/customer/orders/${encodeURIComponent(result.orderId)}/exit-pass`);
+      if (!resp.ok) return false;
+      const data = (await resp.json()) as ExitPass;
+      if (!cancelled) {
+        setExitPass(data);
+        setWaitingPayment(false);
+      }
+      return true;
+    };
+
+    const tick = async () => {
+      if (cancelled) return;
+      const statusResp = await fetch(`${apiBase}/v1/customer/orders/${encodeURIComponent(result.orderId)}`);
+      if (!statusResp.ok) return;
+      const status = (await statusResp.json()) as { paid: boolean };
+      if (status.paid) {
+        await loadExit();
+      }
+    };
+
+    void tick();
+    const id = window.setInterval(() => void tick(), 3000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [result?.orderId, result?.tokenNumber]);
+
   async function pay(mode: "ONLINE" | "COUNTER") {
-    const snap =
-      mode === "COUNTER" ? { subtotal: cart.subtotal, tax: cart.taxTotal, total: cart.grandTotal } : null;
+    if (mode === "ONLINE") {
+      setMessage("Online payment (Razorpay) is not wired up yet. Please pay at the counter.");
+      return;
+    }
+    const snap = { subtotal: cart.subtotal, tax: cart.taxTotal, total: cart.grandTotal };
     const r = await checkout(mode, {
       receiptEmail: receiptEmail.trim() || undefined,
       receiptPhone: receiptPhone.trim() || undefined
     });
     setResult(r);
-    setCounterSnapshot(r && mode === "COUNTER" && snap ? snap : null);
+    setCounterSnapshot(r ? snap : null);
+    setExitPass(null);
+    setWaitingPayment(Boolean(r?.tokenNumber != null));
     if (r) void refreshCart();
   }
 
@@ -69,8 +118,8 @@ export default function CheckoutPage() {
     );
   }
 
-  const isCounterPaid = result?.tokenNumber != null;
-  const snap = counterSnapshot;
+  const isCounter = result?.tokenNumber != null;
+  const showExit = isCounter && exitPass != null;
 
   return (
     <main className="pageCanvas pageCanvas--checkout">
@@ -106,9 +155,10 @@ export default function CheckoutPage() {
           </section>
 
           <section className="checkoutReceiptOpts" aria-label="Receipt options">
-            <p className="checkoutReceiptOpts__label">Receipt (optional)</p>
+            <p className="checkoutReceiptOpts__label">E-receipt (optional)</p>
             <p className="checkoutReceiptOpts__hint">
-              If your store has configured a webhook, we send these with the order for SMS or email receipts.
+              We save your contact details on the order. After the cashier confirms payment, the store can send a
+              receipt by email or WhatsApp if that service is enabled on the backend.
             </p>
             <label className="checkoutReceiptOpts__field">
               <span>Email</span>
@@ -121,11 +171,11 @@ export default function CheckoutPage() {
               />
             </label>
             <label className="checkoutReceiptOpts__field">
-              <span>Phone</span>
+              <span>Phone (WhatsApp)</span>
               <input
                 type="tel"
                 autoComplete="tel"
-                placeholder="+91…"
+                placeholder="10-digit mobile"
                 value={receiptPhone}
                 onChange={(e) => setReceiptPhone(e.target.value)}
               />
@@ -134,15 +184,46 @@ export default function CheckoutPage() {
 
           <section className="checkoutActions">
             <p className="checkoutActions__label">Choose payment</p>
-            <button type="button" className="btnPrimary btnPrimary--full" disabled={loading} onClick={() => void pay("ONLINE")}>
-              Pay online (UPI / card)
+            <button
+              type="button"
+              className="btnGhost btnGhost--full btnGhost--disabledLook"
+              disabled
+              title="Razorpay integration coming soon"
+            >
+              Pay online (UPI / card) — coming soon
             </button>
-            <button type="button" className="btnGhost btnGhost--full" disabled={loading} onClick={() => void pay("COUNTER")}>
+            <button type="button" className="btnPrimary btnPrimary--full" disabled={loading} onClick={() => void pay("COUNTER")}>
               Pay at counter
             </button>
           </section>
         </>
-      ) : isCounterPaid ? (
+      ) : showExit ? (
+        <section className="counterSuccess exitPass">
+          <p className="counterSuccess__eyebrow">You&apos;re all set</p>
+          <h2 className="exitPass__title">Show this at the exit gate</h2>
+          <div className="exitPass__qrWrap">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={exitPass.exitQr} alt="Exit gate QR code" className="exitPass__qr" width={220} height={220} />
+          </div>
+          <p className="exitPass__hint">Valid for 15 minutes · one scan at the gate</p>
+          <div className="checkoutBill checkoutBill--compact">
+            <div className="checkoutBill__row checkoutBill__row--total">
+              <span>Paid</span>
+              <span>₹{exitPass.grandTotal.toFixed(2)}</span>
+            </div>
+          </div>
+          {exitPass.receiptEmail || exitPass.receiptPhone ? (
+            <p className="exitPass__receipt">
+              {exitPass.receiptDelivery === "webhook"
+                ? `Receipt queued for ${exitPass.receiptEmail ?? exitPass.receiptPhone}.`
+                : "Receipt contact saved — ask staff if you do not receive it (store webhook not configured)."}
+            </p>
+          ) : null}
+          <Link href="/shop" className="btnPrimary btnPrimary--full checkoutResult__done">
+            Done · shop again
+          </Link>
+        </section>
+      ) : isCounter ? (
         <section className="counterSuccess">
           <p className="counterSuccess__eyebrow">Take this number to the desk</p>
           <div className="counterSuccess__tokenCard" aria-live="polite">
@@ -158,20 +239,24 @@ export default function CheckoutPage() {
               Copy queue #
             </button>
           </div>
-          <p className="counterSuccess__hint">Show this screen to the cashier so they can pull up your order.</p>
-          {snap ? (
+          <p className="counterSuccess__hint">
+            {waitingPayment
+              ? "Waiting for the cashier to confirm payment… This screen will show your exit QR automatically."
+              : "Show this screen to the cashier so they can pull up your order."}
+          </p>
+          {counterSnapshot ? (
             <div className="checkoutBill checkoutBill--compact">
               <div className="checkoutBill__row">
                 <span>Subtotal (excl. tax)</span>
-                <span>₹{snap.subtotal.toFixed(2)}</span>
+                <span>₹{counterSnapshot.subtotal.toFixed(2)}</span>
               </div>
               <div className="checkoutBill__row">
                 <span>Tax</span>
-                <span>₹{snap.tax.toFixed(2)}</span>
+                <span>₹{counterSnapshot.tax.toFixed(2)}</span>
               </div>
               <div className="checkoutBill__row checkoutBill__row--total">
                 <span>Amount due</span>
-                <span>₹{snap.total.toFixed(2)}</span>
+                <span>₹{counterSnapshot.total.toFixed(2)}</span>
               </div>
             </div>
           ) : null}
@@ -189,33 +274,17 @@ export default function CheckoutPage() {
             </button>
           </div>
           {copyHint ? <p className="copyHint">{copyHint}</p> : null}
-          <Link href="/shop" className="btnPrimary btnPrimary--full checkoutResult__done">
-            Back to shop
-          </Link>
+          {waitingPayment ? <p className="inlineNotice inlineNotice--pulse">Checking payment status…</p> : null}
         </section>
       ) : (
         <section className="checkoutResult panel">
-          <h2 className="checkoutBill__heading">Almost there</h2>
+          <h2 className="checkoutBill__heading">Online payment</h2>
           <p className="checkoutResult__rzp">
-            Complete payment using Razorpay for order <code>{result.orderId}</code>
+            Razorpay checkout is not connected yet. Order <code>{result.orderId}</code> was created but cannot be paid
+            online. Use <strong>Pay at counter</strong> from your bag instead.
           </p>
-          {result.razorpayOrderId ? (
-            <p className="checkoutResult__rzp">
-              Gateway ref <code>{result.razorpayOrderId}</code>
-            </p>
-          ) : null}
-          <div className="copyRow">
-            <button
-              type="button"
-              className="btnGhost btnGhost--full"
-              onClick={() => void copyToClipboard(result.orderId).then((ok) => flashCopy(ok))}
-            >
-              Copy order ID
-            </button>
-          </div>
-          {copyHint ? <p className="copyHint">{copyHint}</p> : null}
-          <Link href="/shop" className="btnPrimary btnPrimary--full checkoutResult__done">
-            Done
+          <Link href="/shop/cart" className="btnPrimary btnPrimary--full checkoutResult__done">
+            Back to bag
           </Link>
         </section>
       )}
