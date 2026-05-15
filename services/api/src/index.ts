@@ -12,6 +12,7 @@ import { addCartItemSchema, checkoutSchema, createSessionSchema, setCartLineQtyS
 import { verifyDb } from "./db/pool";
 import {
   isProductImageStorageConfigured,
+  productImageStorageStatus,
   uploadProductImageToStorage
 } from "./storage/productImages";
 import {
@@ -285,7 +286,14 @@ async function recordPaidOrder(order: Order, whatsapp: string | null, auditActor
 app.get("/health", async (_req, res) => {
   try {
     await verifyDb();
-    res.json({ ok: true, service: "checkout-api", database: "connected" });
+    const imageStorage = productImageStorageStatus();
+    res.json({
+      ok: true,
+      service: "checkout-api",
+      database: "connected",
+      imageStorage: imageStorage.configured ? "supabase" : "local",
+      imageStorageHint: imageStorage.hint
+    });
   } catch (e) {
     res.status(503).json({ ok: false, service: "checkout-api", database: "error", message: String(e) });
   }
