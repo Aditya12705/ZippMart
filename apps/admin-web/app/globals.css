@@ -480,6 +480,149 @@ button.secondary {
   font-size: 12px;
 }
 
+.adminNav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 24px;
+}
+
+.adminNav__item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 120px;
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--olive-dark);
+  cursor: pointer;
+  text-align: left;
+  box-shadow: var(--shadow);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.adminNav__item:hover {
+  border-color: rgba(69, 78, 56, 0.35);
+}
+
+.adminNav__item--active {
+  border-color: var(--accent);
+  background: linear-gradient(160deg, #fffdfb, var(--surface));
+}
+
+.adminNav__label {
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.adminNav__hint {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.adminEmptyHint {
+  margin: 0 0 24px;
+  padding: 20px;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+  text-align: center;
+}
+
+.analysisGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  margin-bottom: 28px;
+}
+
+@media (max-width: 1100px) {
+  .analysisGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.analysisCard--wide {
+  grid-column: 1 / -1;
+}
+
+.analysisBar {
+  height: 12px;
+  border-radius: 999px;
+  background: var(--line);
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.analysisBar__paid {
+  display: block;
+  height: 100%;
+  min-width: 4px;
+  background: linear-gradient(90deg, var(--olive), var(--accent));
+  border-radius: 999px;
+}
+
+.analysisLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 20px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.analysisDot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+.analysisDot--paid {
+  background: var(--accent);
+}
+
+.analysisDot--pending {
+  background: var(--line);
+}
+
+.analysisFoot {
+  margin: 14px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.analysisList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.analysisList li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+}
+
+.analysisList li:last-child {
+  border-bottom: none;
+}
+
+.textWarn {
+  color: #b45309;
+}
+
+.textDanger {
+  color: var(--danger);
+}
+
 .metricsGrid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

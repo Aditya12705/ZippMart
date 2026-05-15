@@ -2,6 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AdminNav, type AdminSection } from "../../components/AdminNav";
+import { OverviewSection } from "../../components/admin/OverviewSection";
 import { BarcodeCameraScanner } from "../../components/BarcodeCameraScanner";
 import { OrderReceiptModal } from "../../components/OrderReceiptModal";
 import { StockAdjustModal } from "../../components/StockAdjustModal";
@@ -138,6 +140,7 @@ export default function AdminDashboardPage() {
   const [authed, setAuthed] = useState(false);
   const [stockModalProduct, setStockModalProduct] = useState<Pick<AdminProduct, "id" | "name" | "barcode" | "inStock"> | null>(null);
   const [stockModalBusy, setStockModalBusy] = useState(false);
+  const [activeSection, setActiveSection] = useState<AdminSection>("overview");
 
   const formProfit = useMemo(() => {
     const sell = Number(sellingPrice);
@@ -297,6 +300,8 @@ export default function AdminDashboardPage() {
     if (resp.ok) setAuditEntries(await resp.json());
   }, [router]);
 
+  const isManager = adminRole === "manager";
+
   useEffect(() => {
     if (!authed) return;
     void loadProducts();
@@ -305,12 +310,20 @@ export default function AdminDashboardPage() {
     void loadOrders();
   }, [authed, loadProducts, loadMetrics, loadDiscounts, loadOrders]);
 
+  useEffect(() => {
+    if (!authed || activeSection !== "audit" || !isManager) return;
+    if (auditEntries.length === 0) void loadAudit();
+  }, [activeSection, authed, isManager, auditEntries.length, loadAudit]);
+
+  function onSectionChange(section: AdminSection) {
+    setActiveSection(section);
+    if (section === "audit" && isManager) void loadAudit();
+  }
+
   function logout() {
     clearAdminToken();
     router.replace("/admin");
   }
-
-  const isManager = adminRole === "manager";
 
   async function voidOrder(orderId: string) {
     if (!confirm("Void this unpaid order? It will disappear from open totals.")) return;
@@ -604,7 +617,7 @@ export default function AdminDashboardPage() {
           <div>
             <p className="adminHeader__eyebrow">ZippMart HQ</p>
             <h1 className="adminHeader__title">Operations dashboard</h1>
-            <p className="adminHeader__sub">Catalogue economics, promotions, and store KPIs.</p>
+            <p className="adminHeader__sub">Inventory, orders, promotions, and store analytics in one place.</p>
           </div>
           <div className="adminHeader__actions">
             <select
@@ -626,7 +639,14 @@ export default function AdminDashboardPage() {
                 <button type="button" className="adminBtn adminBtn--ghost" onClick={() => void downloadOrdersCsv()}>
                   Orders CSV
                 </button>
-                <button type="button" className="adminBtn adminBtn--ghost" onClick={() => void loadAudit()}>
+                <button
+                  type="button"
+                  className="adminBtn adminBtn--ghost"
+                  onClick={() => {
+                    onSectionChange("audit");
+                    void loadAudit();
+                  }}
+                >
                   Audit
                 </button>
               </>
@@ -649,61 +669,13 @@ export default function AdminDashboardPage() {
           </div>
         </header>
 
-        {metrics ? (
-          <section className="metricsGrid" aria-label="Store KPIs">
-            <div className="metricCard">
-              <p className="metricCard__label">Paid orders</p>
-              <p className="metricCard__value">{metrics.paidOrderCount}</p>
-              <p className="metricCard__hint">All time (this server)</p>
-            </div>
-            <div className="metricCard metricCard--accent">
-              <p className="metricCard__label">Net revenue</p>
-              <p className="metricCard__value">{money(metrics.totalRevenue)}</p>
-              <p className="metricCard__hint">Completed payments</p>
-            </div>
-            <div className="metricCard">
-              <p className="metricCard__label">Open orders</p>
-              <p className="metricCard__value">{metrics.openOrderCount}</p>
-              <p className="metricCard__hint">{money(metrics.pendingOrderValue)} at counter / pending</p>
-            </div>
-            <div className="metricCard">
-              <p className="metricCard__label">Avg paid ticket</p>
-              <p className="metricCard__value">{money(metrics.averagePaidOrderValue)}</p>
-              <p className="metricCard__hint">Per settled order</p>
-            </div>
-            <div className="metricCard">
-              <p className="metricCard__label">SKU count</p>
-              <p className="metricCard__value">{metrics.productCount}</p>
-              <p className="metricCard__hint">{metrics.lowStockSkuCount} low stock (&lt; 15 units)</p>
-            </div>
-            <div className="metricCard">
-              <p className="metricCard__label">Inventory @ cost</p>
-              <p className="metricCard__value">{money(metrics.inventoryValueAtCost)}</p>
-              <p className="metricCard__hint">Stock × unit cost</p>
-            </div>
-            <div className="metricCard">
-              <p className="metricCard__label">Inventory @ list</p>
-              <p className="metricCard__value">{money(metrics.inventoryValueAtList)}</p>
-              <p className="metricCard__hint">Stock × list sell</p>
-            </div>
-            <div className="metricCard">
-              <p className="metricCard__label">Active promos</p>
-              <p className="metricCard__value">{metrics.activeDiscountCount}</p>
-              <p className="metricCard__hint">Discount rules live on shop</p>
-            </div>
-          </section>
-        ) : (
-          <p className="muted">Loading metrics…</p>
-        )}
+        <AdminNav active={activeSection} isManager={isManager} onChange={onSectionChange} />
 
-        {metrics && metrics.lowStockSkuCount > 0 ? (
-          <div className="alertBanner" role="status">
-            <strong>{metrics.lowStockSkuCount}</strong> SKU{metrics.lowStockSkuCount === 1 ? "" : "s"} below 15 units —
-            use <strong>Low stock only</strong> under inventory to focus the table.
-          </div>
+        {activeSection === "overview" ? (
+          <OverviewSection metrics={metrics} products={products} orders={orders} money={money} />
         ) : null}
 
-        {orders.length > 0 ? (
+        {activeSection === "orders" && orders.length > 0 ? (
           <section className="panel adminPanel adminPanel--orders" aria-label="Recent orders">
             <h2 className="adminPanel__title">Recent orders</h2>
             <p className="adminPanel__lede">
@@ -794,40 +766,54 @@ export default function AdminDashboardPage() {
               </table>
             </div>
           </section>
+        ) : activeSection === "orders" ? (
+          <p className="muted adminEmptyHint">No orders yet for this store filter.</p>
         ) : null}
 
-        {isManager && auditEntries.length > 0 ? (
-          <section className="panel adminPanel" aria-label="Audit log">
-            <h2 className="adminPanel__title">Audit log</h2>
-            <p className="adminPanel__lede">Last security and inventory events (newest first).</p>
-            <div className="tableWrap">
-              <table className="adminTable adminTable--compact">
-                <thead>
-                  <tr>
-                    <th>When</th>
-                    <th>Actor</th>
-                    <th>Role</th>
-                    <th>Action</th>
-                    <th>Detail</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {auditEntries.map((a) => (
-                    <tr key={a.id}>
-                      <td className="muted">{new Date(a.at).toLocaleString()}</td>
-                      <td>{a.actor}</td>
-                      <td>{a.role}</td>
-                      <td className="mono">{a.action}</td>
-                      <td className="muted">{a.detail}</td>
+        {activeSection === "audit" && isManager ? (
+          auditEntries.length > 0 ? (
+            <section className="panel adminPanel" aria-label="Audit log">
+              <h2 className="adminPanel__title">Audit log</h2>
+              <p className="adminPanel__lede">Last security and inventory events (newest first).</p>
+              <div className="tableWrap">
+                <table className="adminTable adminTable--compact">
+                  <thead>
+                    <tr>
+                      <th>When</th>
+                      <th>Actor</th>
+                      <th>Role</th>
+                      <th>Action</th>
+                      <th>Detail</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
+                  </thead>
+                  <tbody>
+                    {auditEntries.map((a) => (
+                      <tr key={a.id}>
+                        <td className="muted">{new Date(a.at).toLocaleString()}</td>
+                        <td>{a.actor}</td>
+                        <td>{a.role}</td>
+                        <td className="mono">{a.action}</td>
+                        <td className="muted">{a.detail}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          ) : (
+            <p className="muted adminEmptyHint">No audit events yet. Actions like stock changes and voids appear here.</p>
+          )
         ) : null}
 
-        {products.length === 0 && !loading ? (
+        {activeSection === "inventory" ? (
+          <>
+            {metrics && metrics.lowStockSkuCount > 0 ? (
+              <div className="alertBanner" role="status">
+                <strong>{metrics.lowStockSkuCount}</strong> SKU{metrics.lowStockSkuCount === 1 ? "" : "s"} below 15 units —
+                use <strong>Low stock only</strong> in the table below.
+              </div>
+            ) : null}
+            {products.length === 0 && !loading ? (
           <div className="alertBanner" role="status">
             Your catalogue is empty. Use <strong>Add product</strong> on the left to create your first SKU — customers will see it on the shop once saved.
           </div>
@@ -1101,8 +1087,13 @@ export default function AdminDashboardPage() {
               </table>
             </div>
           </section>
+          </div>
+        </div>
+          </>
+        ) : null}
 
-            <section className="panel adminPanel adminPanel--promo">
+        {activeSection === "promotions" ? (
+          <section className="panel adminPanel adminPanel--promo">
               <h2 className="adminPanel__title">Discounts</h2>
               <p className="adminPanel__lede">Percentage off list price for the customer shop. Max 90%. Removes instantly when deleted.</p>
               <div className="promoRow">
@@ -1145,9 +1136,8 @@ export default function AdminDashboardPage() {
                   </div>
                 ))}
               </div>
-            </section>
-          </div>
-        </div>
+          </section>
+        ) : null}
 
         {message ? <div className="adminToast">{message}</div> : null}
 
