@@ -3,7 +3,9 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BarcodeCameraScanner } from "../../components/BarcodeCameraScanner";
+import { OrderReceiptModal } from "../../components/OrderReceiptModal";
 import { StockAdjustModal } from "../../components/StockAdjustModal";
+import type { PaidReceipt } from "../../../lib/receipt";
 import { adminFetchHeaders, clearAdminToken, getAdminRole, getAdminToken } from "../../../lib/adminAuth";
 
 import { apiBase } from "../../../lib/api";
@@ -128,6 +130,10 @@ export default function AdminDashboardPage() {
   const [storeFilter, setStoreFilter] = useState("");
   const [adminRole, setAdminRole] = useState<string | null>(null);
   const [auditEntries, setAuditEntries] = useState<AuditRow[]>([]);
+  const [receiptOpen, setReceiptOpen] = useState(false);
+  const [receiptLoading, setReceiptLoading] = useState(false);
+  const [receiptError, setReceiptError] = useState<string | null>(null);
+  const [receiptData, setReceiptData] = useState<PaidReceipt | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [authed, setAuthed] = useState(false);
   const [stockModalProduct, setStockModalProduct] = useState<Pick<AdminProduct, "id" | "name" | "barcode" | "inStock"> | null>(null);
@@ -337,6 +343,34 @@ export default function AdminDashboardPage() {
       const data = await resp.json().catch(() => ({}));
       setMessage((data as { message?: string }).message ?? "Refund failed");
     }
+  }
+
+  async function viewReceipt(orderId: string) {
+    setReceiptOpen(true);
+    setReceiptLoading(true);
+    setReceiptError(null);
+    setReceiptData(null);
+    try {
+      const resp = await fetch(`${apiBase}/v1/admin/orders/${encodeURIComponent(orderId)}/receipt`, {
+        headers: adminFetchHeaders()
+      });
+      const data = (await resp.json().catch(() => ({}))) as PaidReceipt & { message?: string };
+      if (!resp.ok) {
+        setReceiptError(data.message ?? "Could not load receipt");
+        return;
+      }
+      setReceiptData(data);
+    } catch {
+      setReceiptError("Could not load receipt");
+    } finally {
+      setReceiptLoading(false);
+    }
+  }
+
+  function closeReceiptModal() {
+    setReceiptOpen(false);
+    setReceiptData(null);
+    setReceiptError(null);
   }
 
   async function sendReceipt(orderId: string) {
@@ -673,8 +707,8 @@ export default function AdminDashboardPage() {
           <section className="panel adminPanel adminPanel--orders" aria-label="Recent orders">
             <h2 className="adminPanel__title">Recent orders</h2>
             <p className="adminPanel__lede">
-              Latest checkouts on this server — filter by store above. Managers can void open orders, refund paid
-              orders (restores stock), and trigger receipt webhooks.
+              Latest checkouts on this server — filter by store above. View receipts for paid orders; managers can
+              void, refund, or send receipt webhooks.
             </p>
             <div className="tableWrap">
               <table className="adminTable adminTable--compact">
@@ -688,7 +722,7 @@ export default function AdminDashboardPage() {
                     <th>Lines</th>
                     <th>Total</th>
                     <th>Status</th>
-                    {isManager ? <th>Actions</th> : null}
+                    <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -714,39 +748,46 @@ export default function AdminDashboardPage() {
                           )
                         ) : null}
                       </td>
-                      {isManager ? (
-                        <td>
-                          <div className="orderActions">
-                            {!o.paid && !o.voided && !o.refunded ? (
-                              <button
-                                type="button"
-                                className="adminBtn adminBtn--small"
-                                onClick={() => void voidOrder(o.orderId)}
-                              >
-                                Void
-                              </button>
-                            ) : null}
-                            {o.paid && !o.refunded && !o.voided ? (
-                              <button
-                                type="button"
-                                className="adminBtn adminBtn--small"
-                                onClick={() => void refundOrder(o.orderId)}
-                              >
-                                Refund
-                              </button>
-                            ) : null}
-                            {o.paid && !o.refunded ? (
-                              <button
-                                type="button"
-                                className="adminBtn adminBtn--small"
-                                onClick={() => void sendReceipt(o.orderId)}
-                              >
-                                Receipt
-                              </button>
-                            ) : null}
-                          </div>
-                        </td>
-                      ) : null}
+                      <td>
+                        <div className="orderActions">
+                          {o.paid && !o.voided ? (
+                            <button
+                              type="button"
+                              className="adminBtn adminBtn--small"
+                              onClick={() => void viewReceipt(o.orderId)}
+                            >
+                              View receipt
+                            </button>
+                          ) : null}
+                          {isManager && !o.paid && !o.voided && !o.refunded ? (
+                            <button
+                              type="button"
+                              className="adminBtn adminBtn--small"
+                              onClick={() => void voidOrder(o.orderId)}
+                            >
+                              Void
+                            </button>
+                          ) : null}
+                          {isManager && o.paid && !o.refunded && !o.voided ? (
+                            <button
+                              type="button"
+                              className="adminBtn adminBtn--small"
+                              onClick={() => void refundOrder(o.orderId)}
+                            >
+                              Refund
+                            </button>
+                          ) : null}
+                          {isManager && o.paid && !o.refunded ? (
+                            <button
+                              type="button"
+                              className="adminBtn adminBtn--small adminBtn--ghost"
+                              onClick={() => void sendReceipt(o.orderId)}
+                            >
+                              Send
+                            </button>
+                          ) : null}
+                        </div>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -1109,6 +1150,14 @@ export default function AdminDashboardPage() {
         </div>
 
         {message ? <div className="adminToast">{message}</div> : null}
+
+        <OrderReceiptModal
+          open={receiptOpen}
+          loading={receiptLoading}
+          error={receiptError}
+          receipt={receiptData}
+          onClose={closeReceiptModal}
+        />
 
         <StockAdjustModal
           product={stockModalProduct}

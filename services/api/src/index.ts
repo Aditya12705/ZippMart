@@ -575,34 +575,49 @@ app.get("/v1/customer/orders/:orderId", async (req, res) => {
   });
 });
 
-app.get("/v1/customer/orders/:orderId/receipt", async (req, res) => {
-  const order = await getOrder(pathParam(req.params.orderId));
-  if (!order || order.voided) return res.status(404).json({ message: "Order not found" });
+async function buildReceiptPayload(orderId: string) {
+  const order = await getOrder(orderId);
+  if (!order || order.voided) {
+    return { status: 404 as const, body: { message: "Order not found" } };
+  }
   if (!order.paid) {
-    return res.status(402).json({ message: "Payment not confirmed yet", paid: false });
+    return { status: 402 as const, body: { message: "Payment not confirmed yet", paid: false } };
   }
   const rec = await getReceiptByOrderId(order.id);
   const emailConfigured = Boolean(resendApiKey && emailFrom);
-  return res.json({
-    receiptNumber: rec?.receiptNumber ?? `ORD-${order.id.slice(0, 8)}`,
-    orderId: order.id,
-    storeCode: order.storeCode,
-    createdAt: rec?.createdAt ?? order.createdAt,
-    paymentMode: order.paymentMode,
-    lines: order.lines.map((l) => ({
-      name: l.name,
-      qty: l.qty,
-      unitPrice: l.unitPrice,
-      taxPercent: l.taxPercent,
-      lineTotal: l.lineTotal
-    })),
-    subtotal: order.subtotal,
-    taxTotal: order.taxTotal,
-    grandTotal: order.total,
-    receiptEmail: order.receiptEmail ?? null,
-    emailConfigured,
-    tokenNumber: order.tokenNumber ?? null
-  });
+  return {
+    status: 200 as const,
+    body: {
+      receiptNumber: rec?.receiptNumber ?? `ORD-${order.id.slice(0, 8)}`,
+      orderId: order.id,
+      storeCode: order.storeCode,
+      createdAt: rec?.createdAt ?? order.createdAt,
+      paymentMode: order.paymentMode,
+      lines: order.lines.map((l) => ({
+        name: l.name,
+        qty: l.qty,
+        unitPrice: l.unitPrice,
+        taxPercent: l.taxPercent,
+        lineTotal: l.lineTotal
+      })),
+      subtotal: order.subtotal,
+      taxTotal: order.taxTotal,
+      grandTotal: order.total,
+      receiptEmail: order.receiptEmail ?? null,
+      emailConfigured,
+      tokenNumber: order.tokenNumber ?? null
+    }
+  };
+}
+
+app.get("/v1/customer/orders/:orderId/receipt", async (req, res) => {
+  const result = await buildReceiptPayload(pathParam(req.params.orderId));
+  return res.status(result.status).json(result.body);
+});
+
+app.get("/v1/admin/orders/:orderId/receipt", requireAuth("staff"), async (req, res) => {
+  const result = await buildReceiptPayload(pathParam(req.params.orderId));
+  return res.status(result.status).json(result.body);
 });
 
 app.get("/v1/customer/orders/:orderId/exit-pass", async (req, res) => {
