@@ -898,7 +898,7 @@ export default function AdminDashboardPage() {
                       </button>
                     </div>
                   </div>
-                  <p className="formNote">Shown on the customer shop. Upload saves to the API server, or paste any HTTPS image link.</p>
+                  <p className="formNote">Shown on the customer shop. Upload saves to Supabase Storage when configured, or paste any HTTPS image link.</p>
                 </div>
 
                 <label className={`field${formErrors.costPrice ? " field--invalid" : ""}`}>

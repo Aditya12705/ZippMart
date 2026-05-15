@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@checkout/shared": "*",
+    "@supabase/supabase-js": "^2.49.1",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",

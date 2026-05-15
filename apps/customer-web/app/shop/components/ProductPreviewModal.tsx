@@ -27,7 +27,7 @@ export function ProductPreviewModal({
   useEffect(() => {
     setQty(1);
     setImgFailed(false);
-  }, [product?.id]);
+  }, [product?.id, product?.imageUrl]);
 
   useEffect(() => {
     if (!open || !product) return;

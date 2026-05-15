@@ -1,6 +1,6 @@
 import type { RecommendationProduct } from "../../app/shop/lib/shopConfig";
 import { apiBase } from "../../lib/apiBase";
-import { resolveProductImageUrl } from "../../lib/productImage";
+import { pickProductImageUrl, resolveProductImageUrl } from "../../lib/productImage";
 import { getSupabaseBrowser } from "./browser";
 
 const DEFAULT_TABLE = "products";
@@ -121,7 +121,9 @@ function mergeApiWithSupabase(
     if (!extra) return row;
     return {
       ...row,
-      imageUrl: extra.imageUrl ?? row.imageUrl,
+      imageUrl: pickProductImageUrl(row.imageUrl, extra.imageUrl)
+        ? resolveProductImageUrl(pickProductImageUrl(row.imageUrl, extra.imageUrl))
+        : undefined,
       category: extra.category ?? row.category
     };
   });

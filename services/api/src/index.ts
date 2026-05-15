@@ -11,6 +11,10 @@ import path from "path";
 import { addCartItemSchema, checkoutSchema, createSessionSchema, setCartLineQtySchema } from "@checkout/shared";
 import { verifyDb } from "./db/pool";
 import {
+  isProductImageStorageConfigured,
+  uploadProductImageToStorage
+} from "./storage/productImages";
+import {
   createOrder,
   createProduct,
   createSession,
@@ -747,11 +751,21 @@ app.post("/v1/admin/upload/product-image", requireAuth("staff"), async (req, res
   const ext = mime.includes("png") ? "png" : mime.includes("webp") ? "webp" : mime.includes("gif") ? "gif" : "jpg";
   const buf = Buffer.from(match[2], "base64");
   if (buf.length > 4 * 1024 * 1024) return res.status(400).json({ message: "Image too large (max 4 MB)" });
-  await fs.mkdir(productUploadsDir, { recursive: true });
-  const fname = `${randomUUID()}.${ext}`;
-  await fs.writeFile(path.join(productUploadsDir, fname), buf);
-  const publicBase = process.env.PUBLIC_API_URL?.trim() || `http://localhost:${port}`;
-  return res.json({ url: `${publicBase}/uploads/products/${fname}` });
+  try {
+    if (isProductImageStorageConfigured()) {
+      const url = await uploadProductImageToStorage(buf, ext, mime);
+      return res.json({ url, storage: "supabase" });
+    }
+    await fs.mkdir(productUploadsDir, { recursive: true });
+    const fname = `${randomUUID()}.${ext}`;
+    await fs.writeFile(path.join(productUploadsDir, fname), buf);
+    const publicBase = process.env.PUBLIC_API_URL?.trim() || `http://localhost:${port}`;
+    return res.json({ url: `${publicBase}/uploads/products/${fname}`, storage: "local" });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Upload failed";
+    console.error("[upload/product-image]", msg);
+    return res.status(500).json({ message: msg });
+  }
 });
 
 app.patch("/v1/admin/products/:id/image", requireAuth("staff"), async (req, res) => {

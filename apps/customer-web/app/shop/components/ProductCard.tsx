@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { RecommendationProduct } from "../lib/shopConfig";
 import { productPlaceholderDataUri } from "../lib/productPlaceholder";
 import { resolveProductImageUrl } from "../../../lib/productImage";
@@ -27,6 +27,9 @@ export function ProductCard({
   const list = product.listPrice ?? product.unitPrice;
   const imageSrc = resolveProductImageUrl(product.imageUrl);
   const [imgFailed, setImgFailed] = useState(false);
+  useEffect(() => {
+    setImgFailed(false);
+  }, [imageSrc]);
   const showPlaceholder = !imageSrc || imgFailed;
 
   return (
