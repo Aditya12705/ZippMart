@@ -43,6 +43,10 @@ if (-not (git diff --cached --quiet)) {
     git commit -m "Deploy ZippMart shop, admin, cashier + API (Docker Space)"
 }
 git push
+if ($LASTEXITCODE -ne 0) {
+    Pop-Location
+    Write-Error "HF push failed. Check output above (e.g. secrets scanner rejected a file)."
+}
 Pop-Location
 
 Write-Host "Pushed. Open https://huggingface.co/spaces/ADI576/Zippmart"

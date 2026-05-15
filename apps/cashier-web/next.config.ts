@@ -4,6 +4,7 @@ const apiProxy = process.env.API_PROXY_TARGET?.replace(/\/$/, "");
 const basePath = process.env.NEXT_BASE_PATH?.replace(/\/$/, "") || undefined;
 
 const nextConfig: NextConfig = {
+  output: "standalone",
   ...(basePath ? { basePath } : {}),
   async rewrites() {
     if (!apiProxy) return [];
