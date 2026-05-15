@@ -50,7 +50,7 @@ export function OrderReceiptModal({ open, loading, error, receipt, onClose }: Pr
             ) : null}
           </div>
           <button type="button" className="adminModal__close" onClick={onClose} aria-label="Close">
-            ×
+            <span aria-hidden="true">×</span>
           </button>
         </div>
 

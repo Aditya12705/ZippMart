@@ -73,7 +73,7 @@ export function StockAdjustModal({ product, busy, onClose, onSave }: Props) {
             <p className="adminModal__meta mono">{product.barcode}</p>
           </div>
           <button type="button" className="adminModal__close" onClick={onClose} aria-label="Close">
-            ×
+            <span aria-hidden="true">×</span>
           </button>
         </div>
 
