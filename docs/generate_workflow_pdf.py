@@ -397,7 +397,21 @@ def build() -> None:
     pdf.bullet("Margin per unit at list and promotional price")
     pdf.bullet("CSV export: full variant catalogue and order history (manager)")
 
-    pdf.section_title("12. Apparel Categories Supported")
+    pdf.section_title("12. Enterprise UI & Responsive Layouts")
+    pdf.body(
+        "SeamLine features a modernized, enterprise-grade interface tailored for high-volume retail operations across all device types:"
+    )
+    ui_features = [
+        "Admin Dashboard: Persistent sticky-sidebar layout for desktop, converting to a clean collapsible hamburger menu on mobile.",
+        "Cashier Terminal: High-efficiency split-screen workspace separating queue/lookup controls from the active receipt/action panel.",
+        "Responsive Data Grids: Complex inventory tables gracefully downgrade to card-based grid layouts on mobile to eliminate horizontal scrolling.",
+        "Dark Theme Optimization: Deep, high-contrast dark palette tailored for point-of-sale environments (with configurable light themes for back-office).",
+        "Unified Design System: Consistent typography (Outfit/Syne/Fraunces) and shared CSS variable tokens across Customer, Admin, and Cashier portals.",
+    ]
+    for f in ui_features:
+        pdf.bullet(f)
+
+    pdf.section_title("13. Apparel Categories Supported")
     cats = [
         "Men's Wear, Women's Wear, Kids & Baby, Unisex",
         "Footwear, Accessories, Bags & Luggage",
@@ -408,7 +422,7 @@ def build() -> None:
     for c in cats:
         pdf.bullet(c)
 
-    pdf.section_title("13. Summary")
+    pdf.section_title("14. Summary")
     pdf.body(
         "SeamLine transforms a generic checkout engine into an apparel-aware retail platform. "
         "By treating every size/color as a tracked SKU with style grouping, real-time reservations, "
