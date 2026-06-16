@@ -33,7 +33,7 @@ export function receiptHtml(receipt: PaidReceipt): string {
     "<!DOCTYPE html>",
     '<html lang="en">',
     '<head><meta charset="utf-8"/>',
-    `<title>ZippMart receipt ${escapeHtml(receipt.receiptNumber)}</title>`,
+    `<title>SeamLine receipt ${escapeHtml(receipt.receiptNumber)}</title>`,
     "<style>",
     "body{font-family:system-ui,sans-serif;max-width:420px;margin:24px auto;color:#0f172a}",
     "h1{font-size:1.25rem;margin:0 0 4px}",
@@ -44,7 +44,7 @@ export function receiptHtml(receipt: PaidReceipt): string {
     ".totals div{display:flex;justify-content:space-between;padding:4px 0}",
     ".grand{font-weight:700;font-size:1.1rem;border-top:2px solid #0f172a;padding-top:8px;margin-top:8px}",
     "</style></head><body>",
-    "<h1>ZippMart</h1>",
+    "<h1>SeamLine</h1>",
     `<p class="meta">Receipt ${escapeHtml(receipt.receiptNumber)} · ${escapeHtml(receipt.storeCode)}<br>${when}</p>`,
     `<table><tbody>${rows}</tbody></table>`,
     '<div class="totals">',
@@ -73,7 +73,7 @@ export function downloadReceiptHtml(receipt: PaidReceipt): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `zippmart-receipt-${receipt.receiptNumber.replace(/[^a-zA-Z0-9_-]/g, "")}.html`;
+  a.download = `seamline-receipt-${receipt.receiptNumber.replace(/[^a-zA-Z0-9_-]/g, "")}.html`;
   a.click();
   URL.revokeObjectURL(url);
 }

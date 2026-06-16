@@ -1,4 +1,4 @@
-const KEY = "zippmart-cart-backup-v1";
+const KEY = "seamline-cart-backup-v1";
 
 export type CartBackup = {
   savedAt: string;

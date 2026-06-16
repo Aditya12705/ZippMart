@@ -101,12 +101,27 @@ export default function CartPage() {
           </div>
         )}
 
+        {hasItems && cart.loyaltyDiscount && cart.loyaltyDiscount > 0 ? (
+          <div className="loyaltyCard">
+            <h4 className="loyaltyCard__title">Loyalty Circle Discount Applied</h4>
+            <p className="loyaltyCard__text">
+              An extra {cart.loyaltyDiscountPercent}% has been deducted from your apparel items pre-tax.
+            </p>
+          </div>
+        ) : null}
+
         {hasItems ? (
           <footer className="cartFooter">
             <div className="cartFooter__line">
               <span>Subtotal (excl. tax)</span>
               <span>₹{cart.subtotal.toFixed(2)}</span>
             </div>
+            {cart.loyaltyDiscount && cart.loyaltyDiscount > 0 ? (
+              <div className="cartFooter__line" style={{ color: "var(--olive)" }}>
+                <span>Loyalty Discount ({cart.loyaltyDiscountPercent}%)</span>
+                <span>−₹{cart.loyaltyDiscount.toFixed(2)}</span>
+              </div>
+            ) : null}
             <div className="cartFooter__line">
               <span>Tax</span>
               <span>₹{cart.taxTotal.toFixed(2)}</span>
@@ -115,7 +130,7 @@ export default function CartPage() {
               <span>Total (incl. tax)</span>
               <span>₹{cart.grandTotal.toFixed(2)}</span>
             </div>
-            <p className="cartFooter__note">Subtotal + tax equals your total — same as adding each line above.</p>
+            <p className="cartFooter__note">Subtotal + tax (less discounts) equals your total.</p>
             <Link href="/shop/checkout" className="btnPrimary btnPrimary--full" aria-disabled={!hasItems}>
               Checkout
             </Link>

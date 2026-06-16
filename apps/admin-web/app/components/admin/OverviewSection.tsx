@@ -21,6 +21,8 @@ type Product = {
   name: string;
   category: string;
   inStock: number;
+  availableQty?: number;
+  reservedQty?: number;
   demandScore: number;
   unitPrice: number;
   costPrice: number;
@@ -55,8 +57,9 @@ export function OverviewSection({ metrics, products, orders, money }: Props) {
     let low = 0;
     let ok = 0;
     for (const p of products) {
-      if (p.inStock <= 0) out += 1;
-      else if (p.inStock < 15) low += 1;
+      const avail = p.availableQty ?? p.inStock;
+      if (avail <= 0) out += 1;
+      else if (avail < 5) low += 1;
       else ok += 1;
     }
     return { out, low, ok, total: products.length };
@@ -127,7 +130,7 @@ export function OverviewSection({ metrics, products, orders, money }: Props) {
         <div className="metricCard">
           <p className="metricCard__label">SKU count</p>
           <p className="metricCard__value">{metrics.productCount}</p>
-          <p className="metricCard__hint">{metrics.lowStockSkuCount} low stock (&lt; 15)</p>
+          <p className="metricCard__hint">{metrics.lowStockSkuCount} low stock (&lt; 5 per variant)</p>
         </div>
         <div className="metricCard">
           <p className="metricCard__label">Inventory @ cost</p>
@@ -148,7 +151,7 @@ export function OverviewSection({ metrics, products, orders, money }: Props) {
 
       {metrics.lowStockSkuCount > 0 ? (
         <div className="alertBanner" role="status">
-          <strong>{metrics.lowStockSkuCount}</strong> SKU{metrics.lowStockSkuCount === 1 ? "" : "s"} below 15 units —
+          <strong>{metrics.lowStockSkuCount}</strong> variant{metrics.lowStockSkuCount === 1 ? "" : "s"} below 5 units —
           open <strong>Inventory</strong> and use low-stock filter to replenish.
         </div>
       ) : null}
@@ -179,7 +182,7 @@ export function OverviewSection({ metrics, products, orders, money }: Props) {
           <p className="adminPanel__lede">{stockHealth.total} SKUs in catalogue.</p>
           <ul className="analysisList">
             <li>
-              <span>Healthy (15+ units)</span>
+              <span>Healthy (5+ units)</span>
               <strong>{stockHealth.ok}</strong>
             </li>
             <li>

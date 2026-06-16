@@ -1,5 +1,5 @@
 ---
-title: ZippMart
+title: SeamLine
 emoji: 🛒
 colorFrom: green
 colorTo: blue
@@ -9,15 +9,15 @@ health_check: /health
 pinned: false
 ---
 
-# ZippMart — Full checkout platform
+# SeamLine — Full checkout platform
 
 All apps run in one Docker Space behind nginx on port **7860**.
 
 | App | URL |
 |-----|-----|
-| Customer shop | [/shop](https://adi576-zippmart.hf.space/shop) |
-| Admin HQ | [/admin](https://adi576-zippmart.hf.space/admin) |
-| Cashier terminal | [/cashier](https://adi576-zippmart.hf.space/cashier) |
+| Customer shop | [/shop](https://adi576-seamline.hf.space/shop) |
+| Admin HQ | [/admin](https://adi576-seamline.hf.space/admin) |
+| Cashier terminal | [/cashier](https://adi576-seamline.hf.space/cashier) |
 | API (proxied) | `/checkout-api` |
 
 ## Required secrets
@@ -28,7 +28,7 @@ All apps run in one Docker Space behind nginx on port **7860**.
 | `JWT_SECRET` | Long random string |
 | `ADMIN_USERNAME` / `ADMIN_PASSWORD` | Staff login |
 | `MANAGER_USERNAME` / `MANAGER_PASSWORD` | Manager login |
-| `PUBLIC_API_URL` | `https://adi576-zippmart.hf.space/checkout-api` |
+| `PUBLIC_API_URL` | `https://adi576-seamline.hf.space/checkout-api` |
 
 Optional: `DEFAULT_STORE_CODE`, `CASHIER_API_KEY` (+ same value as `NEXT_PUBLIC_CASHIER_API_KEY` at build if you protect cashier routes).
 

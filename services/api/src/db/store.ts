@@ -1,15 +1,27 @@
 import { randomUUID } from "crypto";
+import type pg from "pg";
+import { getReservationSummary, recordInitialStock, withTransaction } from "./inventory";
 import { getPool, round2 } from "./pool";
 
 export type Product = {
   id: string;
   barcode: string;
+  sku: string;
   name: string;
   category: string;
+  styleCode: string;
+  size: string;
+  color: string;
+  brand: string;
+  season: string;
+  gender: string;
   unitPrice: number;
   costPrice: number;
   taxPercent: number;
   inStock: number;
+  reservedQty: number;
+  availableQty: number;
+  reorderLevel: number;
   demandScore: number;
   imageUrl?: string | null;
 };
@@ -45,38 +57,83 @@ export type Order = {
 
 export type Session = {
   id: string;
+  storeId: string;
   storeCode: string;
   cart: Map<string, number>;
   customerPhone?: string;
   createdAt: string;
+  expiresAt: string;
 };
 
 type ProductRow = {
   id: string;
   barcode: string;
+  sku: string;
   name: string;
   category: string;
+  style_code: string;
+  size: string;
+  color: string;
+  brand: string;
+  season: string;
+  gender: string;
   unit_price: string;
   cost_price: string;
   tax_percent: string;
   in_stock: number;
+  reorder_level: number;
   demand_score: string;
   image_url: string | null;
 };
 
-function mapProduct(row: ProductRow): Product {
+const PRODUCT_SELECT = `id, barcode, sku, name, category, style_code, size, color, brand, season, gender,
+     unit_price, cost_price, tax_percent, in_stock, reorder_level, demand_score, image_url`;
+
+function buildVariantSku(styleCode: string, color: string, size: string, barcode: string): string {
+  const parts = [styleCode, color, size]
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((s) => s.toUpperCase().replace(/\s+/g, "-"));
+  if (parts.length > 0) return parts.join("-");
+  return barcode.trim();
+}
+
+function mapProduct(row: ProductRow, reservedQty = 0): Product {
+  const inStock = row.in_stock;
   return {
     id: row.id,
     barcode: row.barcode,
+    sku: row.sku,
     name: row.name,
     category: row.category,
+    styleCode: row.style_code ?? "",
+    size: row.size ?? "",
+    color: row.color ?? "",
+    brand: row.brand ?? "",
+    season: row.season ?? "",
+    gender: row.gender ?? "Unisex",
     unitPrice: Number(row.unit_price),
     costPrice: Number(row.cost_price),
     taxPercent: Number(row.tax_percent),
-    inStock: row.in_stock,
+    inStock,
+    reservedQty,
+    availableQty: Math.max(0, inStock - reservedQty),
+    reorderLevel: row.reorder_level ?? 10,
     demandScore: Number(row.demand_score),
     imageUrl: row.image_url
   };
+}
+
+async function attachReservationCounts(products: Product[]): Promise<Product[]> {
+  const reserved = await getReservationSummary();
+  return products.map((p) => {
+    const reservedQty = reserved.get(p.id) ?? 0;
+    return {
+      ...p,
+      reservedQty,
+      availableQty: Math.max(0, p.inStock - reservedQty)
+    };
+  });
 }
 
 const defaultStoreCode = process.env.DEFAULT_STORE_CODE?.trim().toUpperCase() || "BLR001";
@@ -102,75 +159,101 @@ export async function getStoreIdByCode(code: string): Promise<string | null> {
 export async function listProducts(): Promise<Product[]> {
   const storeId = await getDefaultStoreId();
   const { rows } = await getPool().query<ProductRow>(
-    `SELECT id, barcode, name, category, unit_price, cost_price, tax_percent, in_stock, demand_score, image_url
+    `SELECT ${PRODUCT_SELECT}
      FROM products WHERE store_id = $1 AND is_active = TRUE ORDER BY name`,
     [storeId]
   );
-  return rows.map(mapProduct);
+  return attachReservationCounts(rows.map((row) => mapProduct(row)));
 }
 
 export async function findProductById(id: string): Promise<Product | null> {
   const { rows } = await getPool().query<ProductRow>(
-    `SELECT id, barcode, name, category, unit_price, cost_price, tax_percent, in_stock, demand_score, image_url
+    `SELECT ${PRODUCT_SELECT}
      FROM products WHERE id = $1 AND is_active = TRUE LIMIT 1`,
     [id]
   );
-  return rows[0] ? mapProduct(rows[0]) : null;
+  if (!rows[0]) return null;
+  const reserved = await getReservationSummary();
+  return mapProduct(rows[0], reserved.get(id) ?? 0);
 }
 
 export async function findProductByBarcode(barcode: string): Promise<Product | null> {
   const storeId = await getDefaultStoreId();
   const { rows } = await getPool().query<ProductRow>(
-    `SELECT id, barcode, name, category, unit_price, cost_price, tax_percent, in_stock, demand_score, image_url
+    `SELECT ${PRODUCT_SELECT}
      FROM products WHERE store_id = $1 AND barcode = $2 AND is_active = TRUE LIMIT 1`,
     [storeId, barcode]
   );
-  return rows[0] ? mapProduct(rows[0]) : null;
+  if (!rows[0]) return null;
+  const reserved = await getReservationSummary();
+  return mapProduct(rows[0], reserved.get(rows[0].id) ?? 0);
 }
 
-export async function createProduct(input: Omit<Product, "id">): Promise<Product> {
-  const storeId = await getDefaultStoreId();
-  const id = randomUUID();
-  const imageUrl = input.imageUrl?.trim() || null;
-  const { rows } = await getPool().query<ProductRow>(
-    `INSERT INTO products (id, store_id, barcode, sku, name, category, unit_price, cost_price, tax_percent, in_stock, demand_score, image_url)
-     VALUES ($1,$2,$3,$3,$4,$5,$6,$7,$8,$9,$10,$11)
-     RETURNING id, barcode, name, category, unit_price, cost_price, tax_percent, in_stock, demand_score, image_url`,
-    [
-      id,
-      storeId,
-      input.barcode,
-      input.name,
-      input.category,
-      input.unitPrice,
-      input.costPrice,
-      input.taxPercent,
-      input.inStock,
-      input.demandScore,
-      imageUrl
-    ]
-  );
-  return mapProduct(rows[0]);
+export async function createProduct(
+  input: Omit<Product, "id" | "sku" | "reservedQty" | "availableQty">,
+  actor = "staff"
+): Promise<Product> {
+  return withTransaction(async (client) => {
+    const storeId = await getDefaultStoreId();
+    const id = randomUUID();
+    const imageUrl = input.imageUrl?.trim() || null;
+    const sku = buildVariantSku(input.styleCode, input.color, input.size, input.barcode);
+    const { rows } = await client.query<ProductRow>(
+      `INSERT INTO products (id, store_id, barcode, sku, name, category, style_code, size, color, brand, season, gender,
+         unit_price, cost_price, tax_percent, in_stock, reorder_level, demand_score, image_url)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+       RETURNING ${PRODUCT_SELECT}`,
+      [
+        id,
+        storeId,
+        input.barcode,
+        sku,
+        input.name,
+        input.category,
+        input.styleCode?.trim() ?? "",
+        input.size?.trim() ?? "",
+        input.color?.trim() ?? "",
+        input.brand?.trim() ?? "",
+        input.season?.trim() ?? "",
+        input.gender?.trim() || "Unisex",
+        input.unitPrice,
+        input.costPrice,
+        input.taxPercent,
+        input.inStock,
+        input.reorderLevel ?? 10,
+        input.demandScore,
+        imageUrl
+      ]
+    );
+    if (input.inStock > 0) {
+      await recordInitialStock(id, storeId, input.inStock, actor, client);
+    }
+    return mapProduct(rows[0]);
+  });
 }
 
 export async function updateProductImage(id: string, imageUrl: string | null): Promise<Product | null> {
   const { rows } = await getPool().query<ProductRow>(
     `UPDATE products SET image_url = $2
      WHERE id = $1 AND is_active = TRUE
-     RETURNING id, barcode, name, category, unit_price, cost_price, tax_percent, in_stock, demand_score, image_url`,
+     RETURNING ${PRODUCT_SELECT}`,
     [id, imageUrl?.trim() || null]
   );
-  return rows[0] ? mapProduct(rows[0]) : null;
+  if (!rows[0]) return null;
+  const reserved = await getReservationSummary();
+  return mapProduct(rows[0], reserved.get(id) ?? 0);
 }
 
 export async function updateProductStock(id: string, inStock: number): Promise<Product | null> {
   const { rows } = await getPool().query<ProductRow>(
     `UPDATE products SET in_stock = $2
      WHERE id = $1 AND is_active = TRUE
-     RETURNING id, barcode, name, category, unit_price, cost_price, tax_percent, in_stock, demand_score, image_url`,
+     RETURNING ${PRODUCT_SELECT}`,
     [id, inStock]
   );
-  return rows[0] ? mapProduct(rows[0]) : null;
+  if (!rows[0]) return null;
+  const reserved = await getReservationSummary();
+  return mapProduct(rows[0], reserved.get(id) ?? 0);
 }
 
 export async function getDiscountMap(): Promise<Map<string, number>> {
@@ -231,12 +314,21 @@ export async function createSession(storeCode: string, customerPhone?: string): 
      VALUES ($1, $2, $3, $4, '{}', $5)`,
     [id, storeId, storeCode.toUpperCase(), customerPhone ?? null, expiresAt.toISOString()]
   );
-  return { id, storeCode: storeCode.toUpperCase(), cart: new Map(), customerPhone, createdAt: new Date().toISOString() };
+  return {
+    id,
+    storeId,
+    storeCode: storeCode.toUpperCase(),
+    cart: new Map(),
+    customerPhone,
+    createdAt: new Date().toISOString(),
+    expiresAt: expiresAt.toISOString()
+  };
 }
 
 export async function getSession(id: string): Promise<Session | null> {
   const { rows } = await getPool().query<{
     id: string;
+    store_id: string;
     store_code: string;
     customer_phone: string | null;
     cart: Record<string, number>;
@@ -250,10 +342,12 @@ export async function getSession(id: string): Promise<Session | null> {
   const cart = new Map<string, number>(Object.entries(cartObj).map(([k, v]) => [k, Number(v)]));
   return {
     id: row.id,
+    storeId: row.store_id,
     storeCode: row.store_code,
     cart,
     customerPhone: row.customer_phone ?? undefined,
-    createdAt: new Date(row.created_at).toISOString()
+    createdAt: new Date(row.created_at).toISOString(),
+    expiresAt: new Date(row.expires_at).toISOString()
   };
 }
 
@@ -267,12 +361,14 @@ export async function getLatestSessionByPhone(phone: string): Promise<Session | 
   const norm = phone.replace(/\s/g, "");
   const { rows } = await getPool().query<{
     id: string;
+    store_id: string;
     store_code: string;
     customer_phone: string | null;
     cart: Record<string, number>;
     created_at: Date;
+    expires_at: Date;
   }>(
-    `SELECT id, store_code, customer_phone, cart, created_at FROM customer_sessions
+    `SELECT id, store_id, store_code, customer_phone, cart, created_at, expires_at FROM customer_sessions
      WHERE REPLACE(COALESCE(customer_phone, ''), ' ', '') = $1 AND status = 'active' AND expires_at > NOW()
      ORDER BY created_at DESC LIMIT 1`,
     [norm]
@@ -281,10 +377,12 @@ export async function getLatestSessionByPhone(phone: string): Promise<Session | 
   if (!row) return null;
   return {
     id: row.id,
+    storeId: row.store_id,
     storeCode: row.store_code,
     cart: new Map(Object.entries(row.cart ?? {}).map(([k, v]) => [k, Number(v)])),
     customerPhone: row.customer_phone ?? undefined,
-    createdAt: new Date(row.created_at).toISOString()
+    createdAt: new Date(row.created_at).toISOString(),
+    expiresAt: new Date(row.expires_at).toISOString()
   };
 }
 
@@ -324,10 +422,11 @@ function mapOrder(row: {
   };
 }
 
-export async function createOrder(order: Order): Promise<void> {
+export async function createOrder(order: Order, client?: pg.PoolClient): Promise<void> {
   const storeId = await getStoreIdByCode(order.storeCode);
   if (!storeId) throw new Error("Unknown store");
-  await getPool().query(
+  const q = client ?? getPool();
+  await q.query(
     `INSERT INTO orders (id, session_id, store_id, store_code, subtotal, tax_total, total, lines, payment_mode, paid, token_number, voided, refunded, receipt_email, receipt_phone, created_at)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10,$11,$12,$13,$14,$15,$16)`,
     [
@@ -383,16 +482,16 @@ export async function listPendingCounterOrders(): Promise<Order[]> {
   return rows.map(mapOrder);
 }
 
-export async function updateOrderPaid(id: string, paid: boolean): Promise<void> {
-  await getPool().query("UPDATE orders SET paid = $2 WHERE id = $1", [id, paid]);
+export async function updateOrderPaid(id: string, paid: boolean, client?: pg.PoolClient): Promise<void> {
+  await (client ?? getPool()).query("UPDATE orders SET paid = $2 WHERE id = $1", [id, paid]);
 }
 
-export async function updateOrderVoided(id: string, voided: boolean): Promise<void> {
-  await getPool().query("UPDATE orders SET voided = $2 WHERE id = $1", [id, voided]);
+export async function updateOrderVoided(id: string, voided: boolean, client?: pg.PoolClient): Promise<void> {
+  await (client ?? getPool()).query("UPDATE orders SET voided = $2 WHERE id = $1", [id, voided]);
 }
 
-export async function updateOrderRefunded(id: string): Promise<void> {
-  await getPool().query("UPDATE orders SET refunded = TRUE, paid = FALSE WHERE id = $1", [id]);
+export async function updateOrderRefunded(id: string, client?: pg.PoolClient): Promise<void> {
+  await (client ?? getPool()).query("UPDATE orders SET refunded = TRUE, paid = FALSE WHERE id = $1", [id]);
 }
 
 export async function nextCounterToken(): Promise<number> {
@@ -410,17 +509,6 @@ export async function nextCounterToken(): Promise<number> {
     return retry.rows[0].next_value;
   }
   return rows[0].next_value;
-}
-
-export async function decrementStock(productId: string, qty: number): Promise<void> {
-  await getPool().query(
-    "UPDATE products SET in_stock = GREATEST(0, in_stock - $2) WHERE id = $1",
-    [productId, qty]
-  );
-}
-
-export async function incrementStock(productId: string, qty: number): Promise<void> {
-  await getPool().query("UPDATE products SET in_stock = in_stock + $2 WHERE id = $1", [productId, qty]);
 }
 
 export async function insertReceipt(rec: {
@@ -511,9 +599,10 @@ export async function getMetrics(storeCode?: string) {
     pendingOrderValue: round2(pendingValue),
     averagePaidOrderValue: round2(paid.length ? revenue / paid.length : 0),
     productCount: products.length,
-    lowStockSkuCount: products.filter((p) => p.inStock < 15).length,
+    lowStockSkuCount: products.filter((p) => p.availableQty < p.reorderLevel).length,
     inventoryValueAtCost: round2(products.reduce((s, p) => s + p.costPrice * p.inStock, 0)),
     inventoryValueAtList: round2(products.reduce((s, p) => s + p.unitPrice * p.inStock, 0)),
+    reservedUnitsTotal: products.reduce((s, p) => s + p.reservedQty, 0),
     activeDiscountCount: discountMap.size
   };
 }

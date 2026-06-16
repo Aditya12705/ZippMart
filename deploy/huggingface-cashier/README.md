@@ -1,5 +1,5 @@
 ---
-title: Zippmart Cashier
+title: SeamLine Cashier
 emoji: 🧾
 colorFrom: blue
 colorTo: green
@@ -8,11 +8,11 @@ app_port: 7860
 pinned: false
 ---
 
-# ZippMart Cashier Terminal
+# SeamLine Cashier Terminal
 
 In-store cashier terminal for order lookup and counter settlement.
 
-Uses the API on the main ZippMart Space: `https://adi576-zippmart.hf.space/checkout-api`
+Uses the API on the main SeamLine Space: `https://adi576-seamline.hf.space/checkout-api`
 
 ## Optional secrets
 

@@ -9,7 +9,7 @@ RUN npm ci
 
 COPY apps/admin-web ./apps/admin-web
 
-ENV NEXT_PUBLIC_API_BASE_URL=https://adi576-zippmart.hf.space/checkout-api
+ENV NEXT_PUBLIC_API_BASE_URL=https://adi576-seamline.hf.space/checkout-api
 RUN npm run build -w admin-web \
   && test -f apps/admin-web/.next/BUILD_ID \
   && test -d apps/admin-web/.next/standalone

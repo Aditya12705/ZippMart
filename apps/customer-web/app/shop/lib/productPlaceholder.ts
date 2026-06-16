@@ -23,6 +23,18 @@ function iconPaths(category: string): string {
       <rect x="68" y="36" width="24" height="14" rx="6" fill="currentColor"/>
       <ellipse cx="80" cy="92" rx="14" ry="6" fill="white" opacity=".35"/>`;
   }
+  if (c.includes("footwear") || c.includes("shoe")) {
+    return `<ellipse cx="80" cy="88" rx="38" ry="14" fill="currentColor" opacity=".75"/>
+      <path d="M48 78 Q58 58 80 62 Q102 58 112 78" fill="currentColor" opacity=".9"/>`;
+  }
+  if (c.includes("accessories") || c.includes("bags")) {
+    return `<rect x="54" y="48" width="52" height="44" rx="8" fill="currentColor" opacity=".85"/>
+      <path d="M64 48 Q80 28 96 48" stroke="currentColor" stroke-width="5" fill="none"/>`;
+  }
+  if (c.includes("wear") || c.includes("active") || c.includes("ethnic") || c.includes("winter")) {
+    return `<path d="M52 44 L80 32 L108 44 L100 96 L60 96 Z" fill="currentColor" opacity=".85"/>
+      <path d="M68 44 L68 72 M92 44 L92 72" stroke="white" stroke-width="4" opacity=".4"/>`;
+  }
   if (c.includes("produce") || c.includes("grocery")) {
     return `<circle cx="58" cy="78" r="22" fill="currentColor" opacity=".85"/>
       <circle cx="88" cy="70" r="18" fill="currentColor" opacity=".65"/>

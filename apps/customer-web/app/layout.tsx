@@ -3,8 +3,8 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "ZippMart",
-  description: "Groceries at the speed of beep."
+  title: "SeamLine",
+  description: "Fashion & merchandising at the speed of scan."
 };
 
 export const viewport: Viewport = {

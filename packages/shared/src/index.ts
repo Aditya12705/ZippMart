@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+export * from "./apparel";
+
 export const paymentModeSchema = z.enum(["ONLINE", "COUNTER"]);
 export type PaymentMode = z.infer<typeof paymentModeSchema>;
 

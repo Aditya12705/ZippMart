@@ -120,7 +120,7 @@ export default function CheckoutPage() {
       setMessage("Online payment (Razorpay) is not wired up yet. Please pay at the counter.");
       return;
     }
-    const snap = { subtotal: cart.subtotal, tax: cart.taxTotal, total: cart.grandTotal };
+    const snap = { subtotal: cart.subtotal - (cart.loyaltyDiscount ?? 0), tax: cart.taxTotal, total: cart.grandTotal };
     const r = await checkout(mode, {
       receiptEmail: receiptEmail.trim() || undefined
     });
@@ -166,6 +166,12 @@ export default function CheckoutPage() {
               <span>Subtotal (before tax)</span>
               <span>₹{cart.subtotal.toFixed(2)}</span>
             </div>
+            {cart.loyaltyDiscount && cart.loyaltyDiscount > 0 ? (
+              <div className="checkoutBill__row" style={{ color: "var(--olive)" }}>
+                <span>Loyalty Discount ({cart.loyaltyDiscountPercent}%)</span>
+                <span>−₹{cart.loyaltyDiscount.toFixed(2)}</span>
+              </div>
+            ) : null}
             <div className="checkoutBill__row">
               <span>Tax</span>
               <span>₹{cart.taxTotal.toFixed(2)}</span>
@@ -174,8 +180,17 @@ export default function CheckoutPage() {
               <span>Total to pay</span>
               <span>₹{cart.grandTotal.toFixed(2)}</span>
             </div>
-            <p className="checkoutBill__footnote">Total includes all taxes — same as the sum of each line above.</p>
+            <p className="checkoutBill__footnote">Total includes all taxes and loyalty discounts.</p>
           </section>
+
+          {cart.loyaltyDiscount && cart.loyaltyDiscount > 0 ? (
+            <div className="loyaltyCard">
+              <h4 className="loyaltyCard__title">Loyalty Circle Discount Applied</h4>
+              <p className="loyaltyCard__text">
+                An extra {cart.loyaltyDiscountPercent}% has been deducted from your apparel items pre-tax.
+              </p>
+            </div>
+          ) : null}
 
           <section className="checkoutReceiptOpts" aria-label="Receipt options">
             <p className="checkoutReceiptOpts__label">Email receipt (optional)</p>

@@ -26,6 +26,7 @@ export function getPool(): pg.Pool {
 export async function verifyDb(): Promise<void> {
   const p = getPool();
   await p.query("SELECT 1");
+  await p.query("ALTER TABLE products ADD COLUMN IF NOT EXISTS reorder_level INT NOT NULL DEFAULT 10");
 }
 
 export function round2(n: number): number {

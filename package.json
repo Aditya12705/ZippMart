@@ -2,7 +2,7 @@
   "name": "checkout-system",
   "version": "1.0.0",
   "private": true,
-  "description": "ZippMart checkout platform monorepo",
+  "description": "SeamLine apparel checkout platform monorepo",
   "workspaces": [
     "apps/*",
     "services/*",

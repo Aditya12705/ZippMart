@@ -21,7 +21,7 @@ import {
 import { apiBase, type RecommendationProduct } from "../lib/shopConfig";
 
 export { apiBase, type RecommendationProduct } from "../lib/shopConfig";
-const SESSION_STORAGE_KEY = "zippmart-shop-session-id";
+const SESSION_STORAGE_KEY = "seamline-shop-session-id";
 
 export type CartLine = {
   productId?: string;
@@ -38,6 +38,8 @@ type CartState = {
   subtotal: number;
   taxTotal: number;
   grandTotal: number;
+  loyaltyDiscount?: number;
+  loyaltyDiscountPercent?: number;
 };
 
 type ShopContextValue = {
@@ -74,7 +76,9 @@ const defaultCart: CartState = {
   items: [],
   subtotal: 0,
   taxTotal: 0,
-  grandTotal: 0
+  grandTotal: 0,
+  loyaltyDiscount: 0,
+  loyaltyDiscountPercent: 0
 };
 
 const ShopContext = createContext<ShopContextValue | null>(null);
@@ -112,7 +116,9 @@ export function ShopProvider({ children }: { children: ReactNode }) {
         items,
         subtotal: Number(data.subtotal ?? 0),
         taxTotal: Number(data.taxTotal ?? 0),
-        grandTotal: Number(data.grandTotal ?? 0)
+        grandTotal: Number(data.grandTotal ?? 0),
+        loyaltyDiscount: Number(data.loyaltyDiscount ?? 0),
+        loyaltyDiscountPercent: Number(data.loyaltyDiscountPercent ?? 0)
       });
       saveCartBackup(
         items
@@ -165,7 +171,8 @@ export function ShopProvider({ children }: { children: ReactNode }) {
     try {
       const fromStorage =
         typeof window !== "undefined"
-          ? localStorage.getItem("zippmart-visit-phone")?.trim() ??
+          ? localStorage.getItem("seamline-visit-phone")?.trim() ??
+            localStorage.getItem("zippmart-visit-phone")?.trim() ??
             localStorage.getItem("supermart-visit-phone")?.trim() ??
             ""
           : "";
@@ -481,7 +488,7 @@ export function ShopProvider({ children }: { children: ReactNode }) {
           setMessage(typeof data.message === "string" ? data.message : "No visit found");
           return false;
         }
-        localStorage.setItem("zippmart-visit-phone", t);
+        localStorage.setItem("seamline-visit-phone", t);
         setSessionId(data.sessionId);
         localStorage.setItem(SESSION_STORAGE_KEY, data.sessionId);
         setSessionBootstrapDone(true);

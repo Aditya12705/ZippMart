@@ -12,6 +12,7 @@ import {
   useShop,
   type RecommendationProduct
 } from "./context/ShopContext";
+import { BRAND_NAME } from "./lib/apparel";
 
 export default function ShopHomePage() {
   const {
@@ -24,19 +25,21 @@ export default function ShopHomePage() {
     addToCart,
     cartItemCount,
     recoverSessionByPhone,
-    restoreCartFromBackup
+    restoreCartFromBackup,
+    cart
   } = useShop();
   const [highDemand, setHighDemand] = useState<RecommendationProduct[]>([]);
   const [catalog, setCatalog] = useState<RecommendationProduct[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [catalogApiDown, setCatalogApiDown] = useState(false);
   const [category, setCategory] = useState("All");
+  const [sizeFilter, setSizeFilter] = useState("All");
   const [preview, setPreview] = useState<RecommendationProduct | null>(null);
   const [visitPhone, setVisitPhone] = useState("");
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    setVisitPhone(localStorage.getItem("zippmart-visit-phone") ?? localStorage.getItem("supermart-visit-phone") ?? "");
+    setVisitPhone(localStorage.getItem("seamline-visit-phone") ?? localStorage.getItem("zippmart-visit-phone") ?? localStorage.getItem("supermart-visit-phone") ?? "");
   }, []);
 
   const loadCatalog = useCallback(async () => {
@@ -75,10 +78,24 @@ export default function ShopHomePage() {
     return ["All", ...Array.from(s).sort((a, b) => a.localeCompare(b))];
   }, [catalog]);
 
+  const sizes = useMemo(() => {
+    const s = new Set<string>();
+    for (const p of catalog) {
+      if (p.size?.trim()) s.add(p.size.trim());
+    }
+    return ["All", ...Array.from(s).sort((a, b) => a.localeCompare(b))];
+  }, [catalog]);
+
   const filtered = useMemo(() => {
-    if (category === "All") return catalog;
-    return catalog.filter((p) => (p.category ?? "").trim() === category);
-  }, [catalog, category]);
+    let list = catalog;
+    if (category !== "All") {
+      list = list.filter((p) => (p.category ?? "").trim() === category);
+    }
+    if (sizeFilter !== "All") {
+      list = list.filter((p) => (p.size ?? "").trim() === sizeFilter);
+    }
+    return list;
+  }, [catalog, category, sizeFilter]);
 
   async function handleAdd(barcode: string, qty: number) {
     if (!sessionId) {
@@ -95,13 +112,19 @@ export default function ShopHomePage() {
         ? new URLSearchParams(window.location.search).get("store")?.trim()?.toUpperCase()
         : undefined;
     if (visitPhone.trim().length >= 10) {
-      localStorage.setItem("zippmart-visit-phone", visitPhone.trim());
+      localStorage.setItem("seamline-visit-phone", visitPhone.trim());
     }
     await createSession(store ?? "BLR001", visitPhone.trim().length >= 10 ? visitPhone.trim() : undefined);
   }
 
   const showConnecting = !sessionId && !sessionBootstrapDone;
   const showConnectionError = sessionBootstrapDone && !sessionId;
+
+  const discountPercent = cart.loyaltyDiscountPercent ?? 0;
+  const loyaltyTier =
+    discountPercent === 10 ? "Gold" :
+    discountPercent === 5 ? "Silver" :
+    (visitPhone.trim().length >= 10 ? "Bronze" : null);
 
   return (
     <>
@@ -110,8 +133,13 @@ export default function ShopHomePage() {
           <div className="heroBlock heroBlock--compact">
             <div className="heroBlock__head">
               <div>
-                <p className="heroBlock__eyebrow">ZippMart · scan &amp; go</p>
-                <h2 className="heroBlock__title">Zip in, stock up</h2>
+                <p className="heroBlock__eyebrow">{BRAND_NAME} · scan &amp; go</p>
+                <h2 className="heroBlock__title">Seam in, style out</h2>
+                {loyaltyTier ? (
+                  <div className={`loyaltyBadge loyaltyBadge--${loyaltyTier.toLowerCase()}`}>
+                    {loyaltyTier} Member ({discountPercent}% Off)
+                  </div>
+                ) : null}
               </div>
               <div className="heroBlock__status">
                 {showConnecting ? (
@@ -189,7 +217,7 @@ export default function ShopHomePage() {
               onChange={(e) => setVisitPhone(e.target.value)}
               onBlur={() => {
                 if (visitPhone.trim().length >= 10) {
-                  localStorage.setItem("zippmart-visit-phone", visitPhone.trim());
+                  localStorage.setItem("seamline-visit-phone", visitPhone.trim());
                 }
               }}
             />
@@ -262,6 +290,22 @@ export default function ShopHomePage() {
               </button>
             ))}
           </div>
+          {sizes.length > 1 ? (
+            <div className="categoryChips categoryChips--sub" role="tablist" aria-label="Size">
+              {sizes.map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  role="tab"
+                  aria-selected={sizeFilter === s}
+                  className={`categoryChip${sizeFilter === s ? " categoryChip--on" : ""}`}
+                  onClick={() => setSizeFilter(s)}
+                >
+                  {s === "All" ? "All sizes" : s}
+                </button>
+              ))}
+            </div>
+          ) : null}
           {catalogLoading ? (
             <p className="emptyCatalog">Loading products…</p>
           ) : catalog.length === 0 ? (

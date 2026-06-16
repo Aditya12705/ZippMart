@@ -1,6 +1,6 @@
-# ZippMart Checkout System
+# SeamLine Checkout System
 
-Monorepo for a self-checkout grocery MVP: customer shop, admin dashboard, cashier terminal, Express API, and optional background worker.
+Monorepo for a self-checkout apparel & merchandising platform: customer shop, admin dashboard, cashier terminal, Express API, and optional background worker.
 
 | App | Local URL | Purpose |
 |-----|-----------|---------|
@@ -44,7 +44,10 @@ npm install
 ### 2. Database
 
 1. Create a [Supabase](https://supabase.com) project.
-2. Open **SQL Editor** and run `supabase/migrations/20260513180000_checkout_mvp.sql`.
+2. Open **SQL Editor** and run migrations in order:
+   - `supabase/migrations/20260513180000_checkout_mvp.sql`
+   - `supabase/migrations/20260528120000_stock_ledger_reservations.sql`
+   - `supabase/migrations/20260615120000_apparel_catalog.sql`
 3. Copy the **pooler** connection string (Settings → Database → Connection string, URI mode, port **6543**). URL-encode special characters in the password (`@` → `%40`).
 
 ### 3. API environment
@@ -104,7 +107,7 @@ The repo is ready to initialize and push. **Never commit** real `.env` files (th
 git init
 git add .
 git status   # confirm no .env or node_modules
-git commit -m "Initial commit: ZippMart checkout monorepo"
+git commit -m "Initial commit: SeamLine checkout monorepo"
 git branch -M main
 git remote add origin https://github.com/<you>/<repo>.git
 git push -u origin main
@@ -132,7 +135,7 @@ The API is **not** a good fit for Vercel serverless (persistent Express process,
    - **Start:** `cd ../.. && npm run start -w api`
    - **Health check path:** `/health`
 3. Set environment variables from `services/api/.env.example` (use real secrets).
-4. Set `PUBLIC_API_URL` to your Render URL (e.g. `https://zippmart-api.onrender.com`).
+4. Set `PUBLIC_API_URL` to your Render URL (e.g. `https://seamline-api.onrender.com`).
 5. Note: free-tier disks are ephemeral — product image uploads may not persist across restarts. For production, move uploads to Supabase Storage or S3.
 
 ### Deploy frontends on Vercel (three projects)

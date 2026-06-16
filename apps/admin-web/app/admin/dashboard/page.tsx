@@ -9,41 +9,61 @@ import { OrderReceiptModal } from "../../components/OrderReceiptModal";
 import { StockAdjustModal } from "../../components/StockAdjustModal";
 import type { PaidReceipt } from "../../../lib/receipt";
 import { adminFetchHeaders, clearAdminToken, getAdminRole, getAdminToken } from "../../../lib/adminAuth";
+import {
+  APPAREL_CATEGORIES,
+  APPAREL_COLORS,
+  APPAREL_GENDERS,
+  APPAREL_SEASONS,
+  APPAREL_SIZES,
+  BRAND_NAME
+} from "../../../lib/apparel";
 
 import { apiBase } from "../../../lib/api";
 
-const CATEGORY_OPTIONS = [
-  "General",
-  "Grocery",
-  "Dairy",
-  "Beverages",
-  "Snacks",
-  "Produce",
-  "Frozen",
-  "Bakery",
-  "Meat & Seafood",
-  "Personal Care",
-  "Household",
-  "Electronics"
-] as const;
+const CATEGORY_OPTIONS = APPAREL_CATEGORIES;
 
-type FormErrors = Partial<Record<"barcode" | "name" | "category" | "costPrice" | "sellingPrice" | "taxPercent" | "inStock" | "demandScore", string>>;
+type FormErrors = Partial<Record<"barcode" | "name" | "category" | "costPrice" | "sellingPrice" | "taxPercent" | "inStock" | "demandScore" | "reorderLevel", string>>;
 
 type AdminProduct = {
   id: string;
   name: string;
   barcode: string;
+  sku: string;
   category: string;
+  styleCode: string;
+  size: string;
+  color: string;
+  brand: string;
+  season: string;
+  gender: string;
   unitPrice: number;
   costPrice: number;
   taxPercent: number;
   inStock: number;
+  reservedQty: number;
+  availableQty: number;
+  reorderLevel: number;
   demandScore: number;
   imageUrl?: string | null;
   discountPercent: number;
   effectiveUnitPrice: number;
   profitPerUnitAtList: number;
   profitPerUnitAtSale: number;
+};
+
+type StockMovementRow = {
+  id: string;
+  productId: string;
+  productName?: string;
+  barcode?: string;
+  delta: number;
+  qtyAfter: number;
+  reason: string;
+  refType: string | null;
+  refId: string | null;
+  actor: string;
+  note: string;
+  createdAt: string;
 };
 
 type Metrics = {
@@ -57,6 +77,7 @@ type Metrics = {
   lowStockSkuCount: number;
   inventoryValueAtCost: number;
   inventoryValueAtList: number;
+  reservedUnitsTotal?: number;
   activeDiscountCount: number;
 };
 
@@ -98,6 +119,106 @@ function money(n: number) {
   return `₹${n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+const CODE39_MAP: Record<string, string> = {
+  "0": "101001101101",
+  "1": "110100101011",
+  "2": "101100101011",
+  "3": "110110010101",
+  "4": "101001101011",
+  "5": "110100110101",
+  "6": "101100110101",
+  "7": "101001011011",
+  "8": "110100101101",
+  "9": "101100101101",
+  "A": "110101001011",
+  "B": "101101001011",
+  "C": "110110100101",
+  "D": "101011001011",
+  "E": "110101100101",
+  "F": "101101100101",
+  "G": "101010011011",
+  "H": "110101001101",
+  "I": "101101001101",
+  "J": "101011001101",
+  "K": "110101010011",
+  "L": "101101010011",
+  "M": "110110101001",
+  "N": "101011010011",
+  "O": "110101101001",
+  "P": "101101101001",
+  "Q": "101010110011",
+  "R": "110101011001",
+  "S": "101101011001",
+  "T": "101011011001",
+  "U": "110010101011",
+  "V": "100110101011",
+  "W": "110011010101",
+  "X": "100101101011",
+  "Y": "110010110101",
+  "Z": "100110110101",
+  "-": "100101011011",
+  ".": "110010101101",
+  " ": "100110101101",
+  "$": "100100100101",
+  "/": "100100101001",
+  "+": "100101001001",
+  "%": "100100101001",
+  "*": "100101101101"
+};
+
+function encodeCode39(text: string) {
+  const chars = ("*" + text + "*").toUpperCase();
+  let bits = "";
+  for (let i = 0; i < chars.length; i++) {
+    const ch = chars[i];
+    const code = CODE39_MAP[ch] || CODE39_MAP[" "];
+    bits += code + "0";
+  }
+  return bits;
+}
+
+function BarcodeSVG({ value }: { value: string }) {
+  const bits = useMemo(() => {
+    const clean = value.replace(/[^A-Z0-9\-.\s$/+%]/gi, "");
+    return encodeCode39(clean || "0000");
+  }, [value]);
+
+  const barWidth = 2;
+  const height = 50;
+  const width = bits.length * barWidth;
+
+  return (
+    <svg width={width + 20} height={height + 25} viewBox={`0 0 ${width + 20} ${height + 25}`} style={{ background: "white", padding: "10px" }}>
+      <g transform="translate(10, 0)">
+        {bits.split("").map((bit, idx) => {
+          if (bit === "1") {
+            return (
+              <rect
+                key={idx}
+                x={idx * barWidth}
+                y={0}
+                width={barWidth}
+                height={height}
+                fill="black"
+              />
+            );
+          }
+          return null;
+        })}
+        <text
+          x={width / 2}
+          y={height + 14}
+          textAnchor="middle"
+          fill="black"
+          style={{ fontFamily: "monospace", fontSize: "11px", fontWeight: "bold" }}
+        >
+          {value.toUpperCase()}
+        </text>
+      </g>
+    </svg>
+  );
+}
+
 export default function AdminDashboardPage() {
   const router = useRouter();
   const [products, setProducts] = useState<AdminProduct[]>([]);
@@ -109,14 +230,25 @@ export default function AdminDashboardPage() {
   const [barcode, setBarcode] = useState("");
   const [name, setName] = useState("");
   const [category, setCategory] = useState("General");
+  const [styleCode, setStyleCode] = useState("");
+  const [size, setSize] = useState("");
+  const [color, setColor] = useState("");
+  const [brand, setBrand] = useState("");
+  const [season, setSeason] = useState("");
+  const [gender, setGender] = useState("Unisex");
   const [costPrice, setCostPrice] = useState("");
   const [sellingPrice, setSellingPrice] = useState("");
+  const [marginPct, setMarginPct] = useState("");
+  const [markupPct, setMarkupPct] = useState("");
+  const [reorderLevel, setReorderLevel] = useState("10");
+  const [printTagProduct, setPrintTagProduct] = useState<AdminProduct | null>(null);
   const [taxPercent, setTaxPercent] = useState("5");
   const [inStock, setInStock] = useState("0");
   const [demandScore, setDemandScore] = useState("0");
   const [imageUrl, setImageUrl] = useState("");
   const [imageUploading, setImageUploading] = useState(false);
   const [cameraOn, setCameraOn] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const inventoryImageInputRef = useRef<HTMLInputElement>(null);
   const [imageTargetId, setImageTargetId] = useState<string | null>(null);
@@ -128,6 +260,8 @@ export default function AdminDashboardPage() {
   const [discountPct, setDiscountPct] = useState("10");
   const [orders, setOrders] = useState<AdminOrderRow[]>([]);
   const [invFilter, setInvFilter] = useState("");
+  const [sizeFilter, setSizeFilter] = useState("");
+  const [colorFilter, setColorFilter] = useState("");
   const [lowStockOnlyView, setLowStockOnlyView] = useState(false);
   const [storeFilter, setStoreFilter] = useState("");
   const [adminRole, setAdminRole] = useState<string | null>(null);
@@ -138,8 +272,11 @@ export default function AdminDashboardPage() {
   const [receiptData, setReceiptData] = useState<PaidReceipt | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [authed, setAuthed] = useState(false);
-  const [stockModalProduct, setStockModalProduct] = useState<Pick<AdminProduct, "id" | "name" | "barcode" | "inStock"> | null>(null);
+  const [stockModalProduct, setStockModalProduct] = useState<
+    Pick<AdminProduct, "id" | "name" | "barcode" | "inStock" | "reservedQty" | "availableQty"> | null
+  >(null);
   const [stockModalBusy, setStockModalBusy] = useState(false);
+  const [stockMovements, setStockMovements] = useState<StockMovementRow[]>([]);
   const [activeSection, setActiveSection] = useState<AdminSection>("overview");
 
   const formProfit = useMemo(() => {
@@ -152,7 +289,13 @@ export default function AdminDashboardPage() {
   const filteredProducts = useMemo(() => {
     let list = products;
     if (lowStockOnlyView) {
-      list = list.filter((p) => p.inStock < 15);
+      list = list.filter((p) => p.availableQty < p.reorderLevel);
+    }
+    if (sizeFilter) {
+      list = list.filter((p) => p.size === sizeFilter);
+    }
+    if (colorFilter) {
+      list = list.filter((p) => p.color === colorFilter);
     }
     const t = invFilter.trim().toLowerCase();
     if (!t) return list;
@@ -160,11 +303,140 @@ export default function AdminDashboardPage() {
       (p) =>
         p.name.toLowerCase().includes(t) ||
         p.barcode.toLowerCase().includes(t) ||
-        p.category.toLowerCase().includes(t)
+        p.sku.toLowerCase().includes(t) ||
+        p.category.toLowerCase().includes(t) ||
+        p.styleCode.toLowerCase().includes(t) ||
+        p.size.toLowerCase().includes(t) ||
+        p.color.toLowerCase().includes(t) ||
+        p.brand.toLowerCase().includes(t)
     );
-  }, [products, invFilter, lowStockOnlyView]);
+  }, [products, invFilter, lowStockOnlyView, sizeFilter, colorFilter]);
 
-  const lowStockCount = useMemo(() => products.filter((p) => p.inStock < 15).length, [products]);
+  const lowStockCount = useMemo(() => products.filter((p) => p.availableQty < p.reorderLevel).length, [products]);
+
+  const sizeOptions = useMemo(() => {
+    const s = new Set<string>();
+    for (const p of products) {
+      if (p.size?.trim()) s.add(p.size.trim());
+    }
+    return Array.from(s).sort((a, b) => a.localeCompare(b));
+  }, [products]);
+
+  const colorOptions = useMemo(() => {
+    const s = new Set<string>();
+    for (const p of products) {
+      if (p.color?.trim()) s.add(p.color.trim());
+    }
+    return Array.from(s).sort((a, b) => a.localeCompare(b));
+  }, [products]);
+
+  const handleCostChange = (val: string) => {
+    setCostPrice(val);
+    setFormErrors((p) => ({ ...p, costPrice: undefined, sellingPrice: undefined }));
+    const c = Number(val);
+    if (!Number.isFinite(c) || c <= 0) return;
+    
+    const s = Number(sellingPrice);
+    if (Number.isFinite(s) && s > 0) {
+      const margin = ((s - c) / s) * 100;
+      const markup = ((s - c) / c) * 100;
+      setMarginPct(margin.toFixed(1));
+      setMarkupPct(markup.toFixed(1));
+    } else if (marginPct) {
+      const m = Number(marginPct);
+      if (m < 100) {
+        const calculatedSell = c / (1 - m / 100);
+        setSellingPrice(calculatedSell.toFixed(2));
+        setMarkupPct(((calculatedSell - c) / c * 100).toFixed(1));
+      }
+    } else if (markupPct) {
+      const mk = Number(markupPct);
+      const calculatedSell = c * (1 + mk / 100);
+      setSellingPrice(calculatedSell.toFixed(2));
+      setMarginPct(((calculatedSell - c) / calculatedSell * 100).toFixed(1));
+    }
+  };
+
+  const handleSellingChange = (val: string) => {
+    setSellingPrice(val);
+    setFormErrors((p) => ({ ...p, sellingPrice: undefined }));
+    const s = Number(val);
+    if (!Number.isFinite(s) || s <= 0) return;
+
+    const c = Number(costPrice);
+    if (Number.isFinite(c) && c > 0) {
+      const margin = ((s - c) / s) * 100;
+      const markup = ((s - c) / c) * 100;
+      setMarginPct(margin.toFixed(1));
+      setMarkupPct(markup.toFixed(1));
+    } else if (marginPct) {
+      const m = Number(marginPct);
+      const calculatedCost = s * (1 - m / 100);
+      setCostPrice(calculatedCost.toFixed(2));
+      setMarkupPct(((s - calculatedCost) / calculatedCost * 100).toFixed(1));
+    } else if (markupPct) {
+      const mk = Number(markupPct);
+      const calculatedCost = s / (1 + mk / 100);
+      setCostPrice(calculatedCost.toFixed(2));
+      setMarginPct(((s - calculatedCost) / s * 100).toFixed(1));
+    }
+  };
+
+  const handleMarginChange = (val: string) => {
+    setMarginPct(val);
+    const m = Number(val);
+    if (!Number.isFinite(m) || m >= 100) return;
+
+    const c = Number(costPrice);
+    if (Number.isFinite(c) && c > 0) {
+      const calculatedSell = c / (1 - m / 100);
+      setSellingPrice(calculatedSell.toFixed(2));
+      setMarkupPct(((calculatedSell - c) / c * 100).toFixed(1));
+    } else {
+      const s = Number(sellingPrice);
+      if (Number.isFinite(s) && s > 0) {
+        const calculatedCost = s * (1 - m / 100);
+        setCostPrice(calculatedCost.toFixed(2));
+        setMarkupPct(((s - calculatedCost) / calculatedCost * 100).toFixed(1));
+      }
+    }
+  };
+
+  const handleMarkupChange = (val: string) => {
+    setMarkupPct(val);
+    const mk = Number(val);
+    if (!Number.isFinite(mk) || mk <= -100) return;
+
+    const c = Number(costPrice);
+    if (Number.isFinite(c) && c > 0) {
+      const calculatedSell = c * (1 + mk / 100);
+      setSellingPrice(calculatedSell.toFixed(2));
+      setMarginPct(((calculatedSell - c) / calculatedSell * 100).toFixed(1));
+    } else {
+      const s = Number(sellingPrice);
+      if (Number.isFinite(s) && s > 0) {
+        const calculatedCost = s / (1 + mk / 100);
+        setCostPrice(calculatedCost.toFixed(2));
+        setMarginPct(((s - calculatedCost) / s * 100).toFixed(1));
+      }
+    }
+  };
+
+  function generateBarcode() {
+    let attempts = 0;
+    let code = "";
+    while (attempts < 100) {
+      code = "";
+      for (let i = 0; i < 12; i++) {
+        code += Math.floor(Math.random() * 10);
+      }
+      if (!products.some((p) => p.barcode === code)) {
+        break;
+      }
+      attempts++;
+    }
+    handleBarcodeInput(code);
+  }
 
   function resolveBarcodeConflict(code: string) {
     const trimmed = code.trim();
@@ -186,6 +458,7 @@ export default function AdminDashboardPage() {
     const tax = Number(taxPercent);
     const stock = Number(inStock);
     const demand = Number(demandScore);
+    const reorder = Number(reorderLevel);
 
     if (!trimmedBarcode) errors.barcode = "Barcode is required.";
     else if (trimmedBarcode.length < 4) errors.barcode = "Barcode must be at least 4 characters.";
@@ -204,6 +477,7 @@ export default function AdminDashboardPage() {
     if (!Number.isFinite(tax) || tax < 0 || tax > 100) errors.taxPercent = "Tax must be between 0 and 100.";
     if (!Number.isFinite(stock) || stock < 0 || !Number.isInteger(stock)) errors.inStock = "Stock must be a whole number ≥ 0.";
     if (!Number.isFinite(demand) || demand < 0 || demand > 100) errors.demandScore = "Demand score must be between 0 and 100.";
+    if (!Number.isFinite(reorder) || reorder < 0 || !Number.isInteger(reorder)) errors.reorderLevel = "Reorder level must be a whole number ≥ 0.";
 
     return errors;
   }
@@ -212,8 +486,17 @@ export default function AdminDashboardPage() {
     setBarcode("");
     setName("");
     setCategory("General");
+    setStyleCode("");
+    setSize("");
+    setColor("");
+    setBrand("");
+    setSeason("");
+    setGender("Unisex");
     setCostPrice("");
     setSellingPrice("");
+    setMarginPct("");
+    setMarkupPct("");
+    setReorderLevel("10");
     setTaxPercent("5");
     setInStock("0");
     setDemandScore("0");
@@ -300,6 +583,16 @@ export default function AdminDashboardPage() {
     if (resp.ok) setAuditEntries(await resp.json());
   }, [router]);
 
+  const loadMovements = useCallback(async () => {
+    const resp = await fetch(`${apiBase}/v1/admin/inventory/movements?limit=50`, { headers: adminFetchHeaders() });
+    if (resp.status === 401) {
+      clearAdminToken();
+      router.replace("/admin");
+      return;
+    }
+    if (resp.ok) setStockMovements(await resp.json());
+  }, [router]);
+
   const isManager = adminRole === "manager";
 
   useEffect(() => {
@@ -318,6 +611,7 @@ export default function AdminDashboardPage() {
   function onSectionChange(section: AdminSection) {
     setActiveSection(section);
     if (section === "audit" && isManager) void loadAudit();
+    if (section === "inventory") void loadMovements();
   }
 
   function logout() {
@@ -494,8 +788,15 @@ export default function AdminDashboardPage() {
         barcode: barcode.trim(),
         name: name.trim(),
         category: category.trim(),
+        styleCode: styleCode.trim(),
+        size: size.trim(),
+        color: color.trim(),
+        brand: brand.trim(),
+        season: season.trim(),
+        gender: gender.trim(),
         unitPrice: Number(sellingPrice),
         costPrice: Number(costPrice),
+        reorderLevel: Number(reorderLevel),
         taxPercent: Number(taxPercent),
         inStock: Number(inStock),
         demandScore: Number(demandScore),
@@ -513,6 +814,7 @@ export default function AdminDashboardPage() {
       resetProductForm();
       await loadProducts();
       await loadMetrics();
+      await loadMovements();
     } else {
       const data = await resp.json().catch(() => ({}));
       const errMsg = (data as { message?: string }).message ?? "Unable to add product";
@@ -542,6 +844,7 @@ export default function AdminDashboardPage() {
       setStockModalProduct(null);
       await loadProducts();
       await loadMetrics();
+      await loadMovements();
     } else {
       const data = await resp.json().catch(() => ({}));
       setMessage((data as { message?: string }).message ?? "Could not update stock.");
@@ -554,7 +857,9 @@ export default function AdminDashboardPage() {
       id: product.id,
       name: product.name,
       barcode: product.barcode,
-      inStock: product.inStock
+      inStock: product.inStock,
+      reservedQty: product.reservedQty,
+      availableQty: product.availableQty
     });
   }
 
@@ -610,50 +915,69 @@ export default function AdminDashboardPage() {
     );
   }
 
+  const sectionTitle =
+    activeSection === "overview" ? "Operations Overview" :
+    activeSection === "inventory" ? "Inventory & SKU Catalog" :
+    activeSection === "orders" ? "Register Orders" :
+    activeSection === "promotions" ? "Promotions & Discounts" :
+    "Security Audit Log";
+
+  const sectionSub =
+    activeSection === "overview" ? "Real-time key performance indicators, low stock alerts, and revenue." :
+    activeSection === "inventory" ? "Manage apparel style variations, dynamic pricing calculations, and barcode labels." :
+    activeSection === "orders" ? "Review counter and customer scan-and-go transaction logs across registers." :
+    activeSection === "promotions" ? "Create loyalty tier discount structures and markdown rules." :
+    "Manager-only audit trail logging status changes, adjustments, and void overrides.";
+
   return (
     <div className="adminShell">
-      <main className="adminMain">
-        <header className="adminHeader">
-          <div>
-            <p className="adminHeader__eyebrow">ZippMart HQ</p>
-            <h1 className="adminHeader__title">Operations dashboard</h1>
-            <p className="adminHeader__sub">Inventory, orders, promotions, and store analytics in one place.</p>
+      <div className="adminContainer">
+        <div className="adminMobileHeader">
+          <div className="adminSidebar__brand">
+            <span className="brandZipp">Seam</span>
+            <span className="brandMart">Line</span>
           </div>
-          <div className="adminHeader__actions">
-            <select
-              className="adminSelect adminSelect--store"
-              value={storeFilter}
-              onChange={(e) => setStoreFilter(e.target.value)}
-              aria-label="Filter metrics and orders by store"
-            >
-              <option value="">All stores</option>
-              <option value="BLR001">BLR001</option>
-              <option value="DEL001">DEL001</option>
-              <option value="MUM001">MUM001</option>
-            </select>
-            <button type="button" className="adminBtn adminBtn--ghost" onClick={() => void downloadProductsCsv()}>
-              Products CSV
-            </button>
-            {isManager ? (
-              <>
-                <button type="button" className="adminBtn adminBtn--ghost" onClick={() => void downloadOrdersCsv()}>
-                  Orders CSV
-                </button>
-                <button
-                  type="button"
-                  className="adminBtn adminBtn--ghost"
-                  onClick={() => {
-                    onSectionChange("audit");
-                    void loadAudit();
-                  }}
-                >
-                  Audit
-                </button>
-              </>
-            ) : null}
+          <button
+            type="button"
+            className="adminMobileHeader__toggle"
+            onClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}
+            aria-label="Toggle navigation menu"
+          >
+            {mobileSidebarOpen ? "✕ Close" : "☰ Menu"}
+          </button>
+        </div>
+        <aside className={`adminSidebar ${mobileSidebarOpen ? "adminSidebar--open" : ""}`}>
+          <div className="adminSidebar__brand">
+            <span className="brandZipp">Seam</span>
+            <span className="brandMart">Line</span>
+          </div>
+
+          <div className="adminSidebar__meta">
+            <div className="adminRolePill">
+              {isManager ? "Manager Console" : "Staff Console"}
+            </div>
+            <label className="adminSidebar__label">
+              <span>Active Register</span>
+              <select
+                className="adminSelect adminSelect--store"
+                value={storeFilter}
+                onChange={(e) => setStoreFilter(e.target.value)}
+                aria-label="Filter metrics and orders by store"
+              >
+                <option value="">All stores</option>
+                <option value="BLR001">BLR001 (Indiranagar)</option>
+                <option value="DEL001">DEL001 (Connaught Place)</option>
+                <option value="MUM001">MUM001 (Bandra West)</option>
+              </select>
+            </label>
+          </div>
+
+          <AdminNav active={activeSection} isManager={isManager} onChange={onSectionChange} />
+
+          <div className="adminSidebar__footer">
             <button
               type="button"
-              className="adminBtn adminBtn--ghost"
+              className="adminBtn adminBtn--ghost adminBtn--full"
               onClick={() => {
                 void loadMetrics();
                 void loadProducts();
@@ -663,15 +987,34 @@ export default function AdminDashboardPage() {
             >
               Refresh
             </button>
-            <button type="button" className="adminBtn adminBtn--ghost adminBtn--logout" onClick={logout}>
+            <button type="button" className="adminBtn adminBtn--ghost adminBtn--logout adminBtn--full" onClick={logout}>
               Log out
             </button>
           </div>
-        </header>
+        </aside>
 
-        <AdminNav active={activeSection} isManager={isManager} onChange={onSectionChange} />
+        <main className="adminMain">
+          <header className="adminHeader">
+            <div>
+              <p className="adminHeader__eyebrow">{BRAND_NAME} HQ · {storeFilter || "Global"}</p>
+              <h1 className="adminHeader__title">{sectionTitle}</h1>
+              <p className="adminHeader__sub">{sectionSub}</p>
+            </div>
+            <div className="adminHeader__actions">
+              {activeSection === "inventory" ? (
+                <button type="button" className="adminBtn adminBtn--ghost" onClick={() => void downloadProductsCsv()}>
+                  Products CSV
+                </button>
+              ) : null}
+              {isManager && activeSection === "orders" ? (
+                <button type="button" className="adminBtn adminBtn--ghost" onClick={() => void downloadOrdersCsv()}>
+                  Orders CSV
+                </button>
+              ) : null}
+            </div>
+          </header>
 
-        {activeSection === "overview" ? (
+          {activeSection === "overview" ? (
           <OverviewSection metrics={metrics} products={products} orders={orders} money={money} />
         ) : null}
 
@@ -809,8 +1152,14 @@ export default function AdminDashboardPage() {
           <>
             {metrics && metrics.lowStockSkuCount > 0 ? (
               <div className="alertBanner" role="status">
-                <strong>{metrics.lowStockSkuCount}</strong> SKU{metrics.lowStockSkuCount === 1 ? "" : "s"} below 15 units —
+                <strong>{metrics.lowStockSkuCount}</strong> SKU{metrics.lowStockSkuCount === 1 ? "" : "s"} below 15 available units —
                 use <strong>Low stock only</strong> in the table below.
+                {metrics.reservedUnitsTotal ? (
+                  <>
+                    {" "}
+                    (<strong>{metrics.reservedUnitsTotal}</strong> units held in open carts / unpaid orders.)
+                  </>
+                ) : null}
               </div>
             ) : null}
             {products.length === 0 && !loading ? (
@@ -854,6 +1203,13 @@ export default function AdminDashboardPage() {
                     <button
                       type="button"
                       className="adminBtn adminBtn--ghost adminBtn--small"
+                      onClick={generateBarcode}
+                    >
+                      Generate
+                    </button>
+                    <button
+                      type="button"
+                      className="adminBtn adminBtn--ghost adminBtn--small"
                       onClick={() => setCameraOn((v) => !v)}
                       aria-pressed={cameraOn}
                     >
@@ -873,8 +1229,19 @@ export default function AdminDashboardPage() {
 
                 <label className={`field${formErrors.name ? " field--invalid" : ""}`}>
                   <span>Product name</span>
-                  <input ref={nameInputRef} value={name} onChange={(e) => { setName(e.target.value); setFormErrors((p) => ({ ...p, name: undefined })); }} placeholder="e.g. Basmati Rice 5kg" />
+                  <input ref={nameInputRef} value={name} onChange={(e) => { setName(e.target.value); setFormErrors((p) => ({ ...p, name: undefined })); }} placeholder="e.g. Slim Fit Oxford Shirt" />
                   {formErrors.name ? <p className="fieldError">{formErrors.name}</p> : null}
+                </label>
+
+                <label className="field">
+                  <span>Style code</span>
+                  <input value={styleCode} onChange={(e) => setStyleCode(e.target.value)} placeholder="e.g. OXF-2026" />
+                  <p className="formNote">Groups size/color variants of the same design.</p>
+                </label>
+
+                <label className="field">
+                  <span>Brand</span>
+                  <input value={brand} onChange={(e) => setBrand(e.target.value)} placeholder="e.g. SeamLine Basics" />
                 </label>
 
                 <label className={`field${formErrors.category ? " field--invalid" : ""}`}>
@@ -885,6 +1252,42 @@ export default function AdminDashboardPage() {
                     ))}
                   </select>
                   {formErrors.category ? <p className="fieldError">{formErrors.category}</p> : null}
+                </label>
+
+                <label className="field">
+                  <span>Size</span>
+                  <select value={size} onChange={(e) => setSize(e.target.value)}>
+                    {APPAREL_SIZES.map((s) => (
+                      <option key={s || "none"} value={s}>{s || "— select —"}</option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="field">
+                  <span>Color</span>
+                  <select value={color} onChange={(e) => setColor(e.target.value)}>
+                    {APPAREL_COLORS.map((c) => (
+                      <option key={c || "none"} value={c}>{c || "— select —"}</option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="field">
+                  <span>Gender</span>
+                  <select value={gender} onChange={(e) => setGender(e.target.value)}>
+                    {APPAREL_GENDERS.map((g) => (
+                      <option key={g} value={g}>{g}</option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="field">
+                  <span>Season / collection</span>
+                  <select value={season} onChange={(e) => setSeason(e.target.value)}>
+                    {APPAREL_SEASONS.map((s) => (
+                      <option key={s || "none"} value={s}>{s || "— none —"}</option>
+                    ))}
+                  </select>
                 </label>
 
                 <div className="field field--full imageField">
@@ -930,14 +1333,24 @@ export default function AdminDashboardPage() {
 
                 <label className={`field${formErrors.costPrice ? " field--invalid" : ""}`}>
                   <span>Unit cost (₹)</span>
-                  <input inputMode="decimal" value={costPrice} onChange={(e) => { setCostPrice(e.target.value); setFormErrors((p) => ({ ...p, costPrice: undefined, sellingPrice: undefined })); }} placeholder="e.g. 120" />
+                  <input inputMode="decimal" value={costPrice} onChange={(e) => handleCostChange(e.target.value)} placeholder="e.g. 120" />
                   {formErrors.costPrice ? <p className="fieldError">{formErrors.costPrice}</p> : null}
                 </label>
 
                 <label className={`field${formErrors.sellingPrice ? " field--invalid" : ""}`}>
                   <span>List selling price (₹)</span>
-                  <input inputMode="decimal" value={sellingPrice} onChange={(e) => { setSellingPrice(e.target.value); setFormErrors((p) => ({ ...p, sellingPrice: undefined })); }} placeholder="e.g. 189" />
+                  <input inputMode="decimal" value={sellingPrice} onChange={(e) => handleSellingChange(e.target.value)} placeholder="e.g. 189" />
                   {formErrors.sellingPrice ? <p className="fieldError">{formErrors.sellingPrice}</p> : null}
+                </label>
+
+                <label className="field">
+                  <span>Margin (%)</span>
+                  <input inputMode="decimal" value={marginPct} onChange={(e) => handleMarginChange(e.target.value)} placeholder="Calculated" />
+                </label>
+
+                <label className="field">
+                  <span>Markup (%)</span>
+                  <input inputMode="decimal" value={markupPct} onChange={(e) => handleMarkupChange(e.target.value)} placeholder="Calculated" />
                 </label>
 
                 <div className="field--pair">
@@ -953,16 +1366,25 @@ export default function AdminDashboardPage() {
                   </label>
                 </div>
 
-                <label className={`field${formErrors.demandScore ? " field--invalid" : ""}`}>
-                  <span>Demand score (0–100)</span>
-                  <input inputMode="numeric" value={demandScore} onChange={(e) => { setDemandScore(e.target.value); setFormErrors((p) => ({ ...p, demandScore: undefined })); }} placeholder="Higher = featured in shop" />
-                  {formErrors.demandScore ? <p className="fieldError">{formErrors.demandScore}</p> : null}
-                </label>
+                <div className="field--pair">
+                  <label className={`field${formErrors.reorderLevel ? " field--invalid" : ""}`}>
+                    <span>Reorder alert level</span>
+                    <input inputMode="numeric" value={reorderLevel} onChange={(e) => { setReorderLevel(e.target.value); setFormErrors((p) => ({ ...p, reorderLevel: undefined })); }} placeholder="10" />
+                    {formErrors.reorderLevel ? <p className="fieldError">{formErrors.reorderLevel}</p> : null}
+                  </label>
+                  <label className={`field${formErrors.demandScore ? " field--invalid" : ""}`}>
+                    <span>Demand score (0–100)</span>
+                    <input inputMode="numeric" value={demandScore} onChange={(e) => { setDemandScore(e.target.value); setFormErrors((p) => ({ ...p, demandScore: undefined })); }} placeholder="Higher = featured in shop" />
+                    {formErrors.demandScore ? <p className="fieldError">{formErrors.demandScore}</p> : null}
+                  </label>
+                </div>
               </div>
 
               {formProfit != null ? (
                 <p className="profitHint">
                   Est. profit / unit at list: <strong>{money(formProfit)}</strong>
+                  {marginPct ? <> · margin: <strong>{marginPct}%</strong></> : null}
+                  {markupPct ? <> · markup: <strong>{markupPct}%</strong></> : null}
                   {Number(taxPercent) > 0 ? (
                     <> · shelf price incl. {taxPercent}% tax: <strong>{money(Math.round(Number(sellingPrice) * (1 + Number(taxPercent) / 100) * 100) / 100)}</strong></>
                   ) : null}
@@ -981,23 +1403,41 @@ export default function AdminDashboardPage() {
                 <button type="button" className="adminBtn adminBtn--ghost" disabled={loading} onClick={resetProductForm}>
                   Clear form
                 </button>
-                <p className="formNote">Required: barcode, name, category, unit cost, and selling price. Stock can be zero for catalogue-only SKUs.</p>
+                <p className="formNote">Each size/color is a separate SKU with its own hang-tag barcode. SKU auto-generates as STYLE-COLOR-SIZE.</p>
               </div>
             </section>
           </div>
 
           <div className="adminWorkspace__right">
             <section className="panel adminPanel adminWorkspace__inventory">
-            <h2 className="adminPanel__title">Inventory &amp; economics</h2>
+            <h2 className="adminPanel__title">Variant inventory &amp; economics</h2>
             <div className="invToolbar">
               <label className="invSearch">
                 <span className="srOnly">Filter products</span>
                 <input
                   type="search"
-                  placeholder="Filter by name, barcode, category…"
+                  placeholder="Filter by name, style, SKU, barcode…"
                   value={invFilter}
                   onChange={(e) => setInvFilter(e.target.value)}
                 />
+              </label>
+              <label className="invSearch">
+                <span className="srOnly">Filter by size</span>
+                <select value={sizeFilter} onChange={(e) => setSizeFilter(e.target.value)} aria-label="Filter by size">
+                  <option value="">All sizes</option>
+                  {sizeOptions.map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="invSearch">
+                <span className="srOnly">Filter by color</span>
+                <select value={colorFilter} onChange={(e) => setColorFilter(e.target.value)} aria-label="Filter by color">
+                  <option value="">All colors</option>
+                  {colorOptions.map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
               </label>
               <button type="button" className="adminBtn adminBtn--small" onClick={() => setInvFilter("")}>
                 Clear search
@@ -1010,82 +1450,222 @@ export default function AdminDashboardPage() {
                 Low stock only ({lowStockCount})
               </button>
             </div>
-            <div className="tableWrap">
-              <table className="adminTable">
-                <thead>
-                  <tr>
-                    <th>Product</th>
-                    <th>Barcode</th>
-                    <th>Cost</th>
-                    <th>List</th>
-                    <th>Promo</th>
-                    <th>Shelf</th>
-                    <th>Profit / unit</th>
-                    <th>Stock</th>
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredProducts.length === 0 ? (
+            <div className="adminDesktopTable">
+              <div className="tableWrap">
+                <table className="adminTable">
+                  <thead>
                     <tr>
-                      <td colSpan={9} className="muted" style={{ padding: "20px 14px" }}>
-                        No products match this filter. Clear search or turn off low-stock-only.
-                      </td>
+                      <th>Variant</th>
+                      <th>SKU / Barcode</th>
+                      <th>Cost</th>
+                      <th>List</th>
+                      <th>Promo</th>
+                      <th>Shelf</th>
+                      <th>Profit / unit</th>
+                      <th>On hand</th>
+                      <th>Reserved</th>
+                      <th>Available</th>
+                      <th />
                     </tr>
-                  ) : (
-                    filteredProducts.map((p) => (
-                      <tr key={p.id} className={p.discountPercent > 0 ? "adminTable__row--hot" : undefined}>
-                        <td>
-                          <div className="invProductCell">
-                            {p.imageUrl ? (
-                              <img src={p.imageUrl} alt="" className="invProductCell__thumb" />
-                            ) : (
-                              <span className="invProductCell__thumb invProductCell__thumb--empty" aria-hidden />
-                            )}
-                            <div>
-                              <strong>{p.name}</strong>
-                              <div className="muted">{p.category}</div>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="mono">{p.barcode}</td>
-                        <td>{money(p.costPrice)}</td>
-                        <td>{money(p.unitPrice)}</td>
-                        <td>{p.discountPercent > 0 ? <span className="pillHot">{p.discountPercent}%</span> : "—"}</td>
-                        <td>{money(p.effectiveUnitPrice)}</td>
-                        <td>{money(p.profitPerUnitAtSale)}</td>
-                        <td>
-                          <span
-                            className={
-                              p.inStock === 0 ? "stockCell stockCell--out" : p.inStock < 15 ? "stockCell stockCell--low" : "stockCell"
-                            }
-                          >
-                            {p.inStock}
-                          </span>
-                        </td>
-                        <td>
-                          <div className="invRowActions">
-                            <button type="button" className="adminBtn adminBtn--small" onClick={() => openStockModal(p)}>
-                              Set stock
-                            </button>
-                            <button
-                              type="button"
-                              className="adminBtn adminBtn--small adminBtn--ghost"
-                              onClick={() => {
-                                setImageTargetId(p.id);
-                                inventoryImageInputRef.current?.click();
-                              }}
-                            >
-                              Image
-                            </button>
-                          </div>
+                  </thead>
+                  <tbody>
+                    {filteredProducts.length === 0 ? (
+                      <tr>
+                        <td colSpan={11} className="muted" style={{ padding: "20px 14px" }}>
+                          No products match this filter. Clear search or turn off low-stock-only.
                         </td>
                       </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+                    ) : (
+                      filteredProducts.map((p) => (
+                        <tr key={p.id} className={p.discountPercent > 0 ? "adminTable__row--hot" : undefined}>
+                          <td>
+                            <div className="invProductCell">
+                              {p.imageUrl ? (
+                                <img src={p.imageUrl} alt="" className="invProductCell__thumb" />
+                              ) : (
+                                <span className="invProductCell__thumb invProductCell__thumb--empty" aria-hidden />
+                              )}
+                              <div>
+                                <strong>{p.name}</strong>
+                                <div className="muted">
+                                  {[p.styleCode, p.size, p.color, p.category].filter(Boolean).join(" · ")}
+                                </div>
+                                {p.brand ? <div className="muted">{p.brand}{p.season ? ` · ${p.season}` : ""}</div> : null}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="mono">
+                            <div>{p.sku || "—"}</div>
+                            <div className="muted">{p.barcode}</div>
+                          </td>
+                          <td>{money(p.costPrice)}</td>
+                          <td>{money(p.unitPrice)}</td>
+                          <td>{p.discountPercent > 0 ? <span className="pillHot">{p.discountPercent}%</span> : "—"}</td>
+                          <td>{money(p.effectiveUnitPrice)}</td>
+                          <td>{money(p.profitPerUnitAtSale)}</td>
+                          <td>{p.inStock}</td>
+                          <td>{p.reservedQty > 0 ? <span className="textWarn">{p.reservedQty}</span> : "0"}</td>
+                          <td>
+                            <span
+                              className={
+                                p.availableQty === 0
+                                  ? "stockCell stockCell--out"
+                                  : p.availableQty < 5
+                                    ? "stockCell stockCell--low"
+                                    : "stockCell"
+                              }
+                            >
+                              {p.availableQty}
+                            </span>
+                          </td>
+                          <td>
+                            <div className="invRowActions">
+                              <button type="button" className="adminBtn adminBtn--small" onClick={() => openStockModal(p)}>
+                                Set stock
+                              </button>
+                              <button
+                                type="button"
+                                className="adminBtn adminBtn--small adminBtn--ghost"
+                                onClick={() => {
+                                  setImageTargetId(p.id);
+                                  inventoryImageInputRef.current?.click();
+                                }}
+                              >
+                                Image
+                              </button>
+                              <button
+                                type="button"
+                                className="adminBtn adminBtn--small adminBtn--ghost"
+                                onClick={() => setPrintTagProduct(p)}
+                              >
+                                Print Tag
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
+
+            <div className="adminMobileCards">
+              {filteredProducts.length === 0 ? (
+                <p className="muted" style={{ textAlign: "center", padding: "28px 12px", background: "var(--surface)", borderRadius: "var(--radius)", border: "1px solid var(--line)" }}>
+                  No products match this filter. Clear search or turn off low-stock-only.
+                </p>
+              ) : (
+                filteredProducts.map((p) => (
+                  <div key={p.id} className={`adminInvCard ${p.discountPercent > 0 ? "adminInvCard--hot" : ""}`}>
+                    <div className="adminInvCard__header">
+                      {p.imageUrl ? (
+                        <img src={p.imageUrl} alt="" className="adminInvCard__thumb" />
+                      ) : (
+                        <span className="adminInvCard__thumb adminInvCard__thumb--empty" aria-hidden />
+                      )}
+                      <div className="adminInvCard__titleSection">
+                        <h4 className="adminInvCard__name">{p.name}</h4>
+                        <div className="adminInvCard__sub">{[p.styleCode, p.size, p.color, p.category].filter(Boolean).join(" · ")}</div>
+                        {p.brand ? <div className="adminInvCard__brand">{p.brand}{p.season ? ` · ${p.season}` : ""}</div> : null}
+                      </div>
+                    </div>
+                    
+                    <div className="adminInvCard__body">
+                      <div className="adminInvCard__details">
+                        <div className="adminInvCard__row"><strong>SKU:</strong> <span className="mono">{p.sku || "—"}</span></div>
+                        <div className="adminInvCard__row"><strong>Barcode:</strong> <span className="mono">{p.barcode}</span></div>
+                        <div className="adminInvCard__row"><strong>Cost:</strong> {money(p.costPrice)}</div>
+                        <div className="adminInvCard__row"><strong>List Price:</strong> {money(p.unitPrice)}</div>
+                        <div className="adminInvCard__row"><strong>Promo:</strong> {p.discountPercent > 0 ? <span className="pillHot">{p.discountPercent}%</span> : "—"}</div>
+                        <div className="adminInvCard__row"><strong>Shelf Price:</strong> {money(p.effectiveUnitPrice)}</div>
+                        <div className="adminInvCard__row"><strong>Profit/unit:</strong> {money(p.profitPerUnitAtSale)}</div>
+                      </div>
+                      
+                      <div className="adminInvCard__stock">
+                        <div className="adminInvCard__stockItem">
+                          <span className="adminInvCard__stockLabel">On Hand</span>
+                          <span className="adminInvCard__stockValue">{p.inStock}</span>
+                        </div>
+                        <div className="adminInvCard__stockItem">
+                          <span className="adminInvCard__stockLabel">Reserved</span>
+                          <span className="adminInvCard__stockValue">{p.reservedQty > 0 ? <span className="textWarn">{p.reservedQty}</span> : "0"}</span>
+                        </div>
+                        <div className="adminInvCard__stockItem">
+                          <span className="adminInvCard__stockLabel">Available</span>
+                          <span className={`adminInvCard__stockValue ${p.availableQty === 0 ? "stockCell--out" : p.availableQty < 5 ? "stockCell--low" : ""}`}>
+                            {p.availableQty}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="adminInvCard__actions">
+                      <button type="button" className="adminBtn adminBtn--small" onClick={() => openStockModal(p)}>
+                        Set stock
+                      </button>
+                      <button
+                        type="button"
+                        className="adminBtn adminBtn--small adminBtn--ghost"
+                        onClick={() => {
+                          setImageTargetId(p.id);
+                          inventoryImageInputRef.current?.click();
+                        }}
+                      >
+                        Image
+                      </button>
+                      <button
+                        type="button"
+                        className="adminBtn adminBtn--small adminBtn--ghost"
+                        onClick={() => setPrintTagProduct(p)}
+                      >
+                        Print Tag
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <section className="panel adminPanel" style={{ marginTop: 16 }}>
+              <h2 className="adminPanel__title">Stock ledger</h2>
+              <p className="adminPanel__lede">Recent inventory events — sales, refunds, adjustments, and opening stock.</p>
+              {stockMovements.length === 0 ? (
+                <p className="muted adminEmptyHint">No stock movements yet. Run the latest database migration if this store existed before the ledger upgrade.</p>
+              ) : (
+                <div className="adminTableWrap">
+                  <table className="adminTable">
+                    <thead>
+                      <tr>
+                        <th>When</th>
+                        <th>Product</th>
+                        <th>Δ</th>
+                        <th>After</th>
+                        <th>Reason</th>
+                        <th>Actor</th>
+                        <th>Note</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {stockMovements.map((m) => (
+                        <tr key={m.id}>
+                          <td className="mono">{new Date(m.createdAt).toLocaleString()}</td>
+                          <td>
+                            <strong>{m.productName ?? m.productId.slice(0, 8)}</strong>
+                            {m.barcode ? <div className="muted mono">{m.barcode}</div> : null}
+                          </td>
+                          <td className={m.delta < 0 ? "textDanger" : "textOk"}>{m.delta > 0 ? `+${m.delta}` : m.delta}</td>
+                          <td>{m.qtyAfter}</td>
+                          <td>{m.reason}</td>
+                          <td>{m.actor}</td>
+                          <td className="muted">{m.note || "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
           </section>
           </div>
         </div>
@@ -1160,6 +1740,73 @@ export default function AdminDashboardPage() {
           }}
         />
 
+        {printTagProduct ? (
+          <div className="printTagModal" style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100%",
+            height: "100%",
+            background: "rgba(0, 0, 0, 0.75)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+            padding: "20px"
+          }}>
+            <div className="printTagCard" style={{
+              background: "var(--surface)",
+              border: "1px solid var(--line)",
+              borderRadius: "16px",
+              padding: "24px",
+              width: "100%",
+              maxWidth: "400px",
+              boxShadow: "var(--shadow)"
+            }}>
+              <h3 style={{ marginTop: 0, marginBottom: "8px" }}>Print Hang Tag</h3>
+              <p className="muted" style={{ fontSize: "13px", marginBottom: "16px" }}>
+                Send this SKU directly to your thermal barcode label printer.
+              </p>
+              <div id="barcode-print-area" style={{
+                background: "white",
+                color: "black",
+                padding: "16px",
+                borderRadius: "8px",
+                textAlign: "center",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                border: "1px solid #ccc",
+                margin: "16px 0"
+              }}>
+                <div style={{ fontSize: "14px", fontWeight: "bold", marginBottom: "4px", color: "black" }}>
+                  {printTagProduct.brand || BRAND_NAME}
+                </div>
+                <div style={{ fontSize: "13px", marginBottom: "8px", color: "#333" }}>
+                  {printTagProduct.name}
+                </div>
+                <div style={{ display: "flex", gap: "8px", fontSize: "11px", color: "#666", marginBottom: "8px" }}>
+                  <span>Size: {printTagProduct.size || "—"}</span>
+                  <span>Color: {printTagProduct.color || "—"}</span>
+                </div>
+                <BarcodeSVG value={printTagProduct.barcode} />
+                <div style={{ fontSize: "14px", fontWeight: "bold", marginTop: "8px", color: "black" }}>
+                  {money(printTagProduct.unitPrice)}
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: "10px", marginTop: "16px" }}>
+                <button type="button" className="adminBtn" style={{ flex: 1 }} onClick={() => window.print()}>
+                  Print
+                </button>
+                <button type="button" className="adminBtn adminBtn--ghost" style={{ flex: 1 }} onClick={() => setPrintTagProduct(null)}>
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
         <input
           ref={inventoryImageInputRef}
           type="file"
@@ -1176,5 +1823,6 @@ export default function AdminDashboardPage() {
         />
       </main>
     </div>
+  </div>
   );
 }

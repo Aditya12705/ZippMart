@@ -3,8 +3,8 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "ZippMart HQ",
-  description: "ZippMart operations console"
+  title: "SeamLine HQ",
+  description: "SeamLine operations console"
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

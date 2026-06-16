@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { apiBase, cashierHeaders } from "../lib/api";
-const RECENT_KEY = "zippmart-cashier-recent";
+const RECENT_KEY = "seamline-cashier-recent";
 const MAX_RECENT = 8;
 
 type OrderLine = {
@@ -193,7 +193,7 @@ export default function CashierHomePage() {
   return (
     <div className="shell">
       <header className="header">
-        <p className="header__eyebrow">ZippMart</p>
+        <p className="header__eyebrow">SeamLine</p>
         <h1 className="header__title">Counter</h1>
         <p className="header__sub">
           Look up queue tokens or order IDs, verify the basket, then settle cash or card at the till.
@@ -203,165 +203,180 @@ export default function CashierHomePage() {
         </Link>
       </header>
 
-      {stats ? (
-        <div className="statsRow" aria-label="Today at counter">
-          <div className="statPill">
-            <span className="statPill__label">Paid today</span>
-            <span className="statPill__value">{stats.paidCount}</span>
-          </div>
-          <div className="statPill">
-            <span className="statPill__label">Awaiting pay</span>
-            <span className="statPill__value">{stats.pendingCount}</span>
-          </div>
-          <div className="statPill statPill--accent">
-            <span className="statPill__label">Revenue today</span>
-            <span className="statPill__value">₹{stats.revenueToday.toFixed(2)}</span>
-          </div>
-        </div>
-      ) : null}
+      <div className="cashierWorkspace">
+        <div className="cashierWorkspace__left">
+          {stats ? (
+            <div className="statsRow" aria-label="Today at counter">
+              <div className="statPill">
+                <span className="statPill__label">Paid today</span>
+                <span className="statPill__value">{stats.paidCount}</span>
+              </div>
+              <div className="statPill">
+                <span className="statPill__label">Awaiting pay</span>
+                <span className="statPill__value">{stats.pendingCount}</span>
+              </div>
+              <div className="statPill statPill--accent">
+                <span className="statPill__label">Revenue today</span>
+                <span className="statPill__value">₹{stats.revenueToday.toFixed(2)}</span>
+              </div>
+            </div>
+          ) : null}
 
-      {pending.length > 0 ? (
-        <section className="queuePanel" aria-label="Counter queue">
-          <p className="queuePanel__title">Waiting for payment ({pending.length})</p>
-          <div className="queueChips">
-            {pending.map((p) => (
-              <button
-                key={p.orderId}
-                type="button"
-                className="queueChip"
-                onClick={() => void lookup(p.tokenNumber != null ? String(p.tokenNumber) : p.orderId)}
-              >
-                {p.tokenNumber != null ? `#${p.tokenNumber}` : p.orderId.slice(0, 8)}
-                <span className="queueChip__amt">₹{p.grandTotal.toFixed(0)}</span>
+          {pending.length > 0 ? (
+            <section className="queuePanel" aria-label="Counter queue">
+              <p className="queuePanel__title">Waiting for payment ({pending.length})</p>
+              <div className="queueChips">
+                {pending.map((p) => (
+                  <button
+                    key={p.orderId}
+                    type="button"
+                    className="queueChip"
+                    onClick={() => void lookup(p.tokenNumber != null ? String(p.tokenNumber) : p.orderId)}
+                  >
+                    {p.tokenNumber != null ? `#${p.tokenNumber}` : p.orderId.slice(0, 8)}
+                    <span className="queueChip__amt">₹{p.grandTotal.toFixed(0)}</span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
+          <div className="card lookupCard">
+            <h2 className="card__title">Order lookup</h2>
+            <div className="lookup">
+              <input
+                className="lookup__input"
+                placeholder="Order ID or token #"
+                title="USB scanners usually type the code and press Enter — lookup runs automatically."
+                value={ref}
+                onChange={(e) => setRef(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && void lookup()}
+                aria-label="Order ID or token number"
+              />
+              <button type="button" className="btn" disabled={loading} onClick={() => void lookup()}>
+                {loading ? "…" : "Look up"}
               </button>
-            ))}
-          </div>
-        </section>
-      ) : null}
+            </div>
 
-      <div className="lookup">
-        <input
-          className="lookup__input"
-          placeholder="Order ID or token #"
-          title="USB scanners usually type the code and press Enter — lookup runs automatically."
-          value={ref}
-          onChange={(e) => setRef(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && void lookup()}
-          aria-label="Order ID or token number"
-        />
-        <button type="button" className="btn" disabled={loading} onClick={() => void lookup()}>
-          {loading ? "…" : "Look up"}
-        </button>
-      </div>
-
-      {recent.length > 0 ? (
-        <div className="recentBlock">
-          <p className="recentBlock__label">Recent</p>
-          <div className="recentChips">
-            {recent.map((r) => (
-              <button
-                key={`${r.ref}-${r.at}`}
-                type="button"
-                className="recentChip"
-                onClick={() => void lookup(r.ref)}
-              >
-                {r.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      ) : null}
-
-      <p className="hint">Counter customers see a token (e.g. 1001). Full UUID works for any order channel.</p>
-
-      {error ? <div className="err">{error}</div> : null}
-      {copyToast ? <div className="copyToast">{copyToast}</div> : null}
-
-      {order ? (
-        <>
-          <div className="actionBar">
-            <button type="button" className="btnGhost" onClick={() => void newLookup()}>
-              New lookup
-            </button>
-            <button type="button" className="btnGhost" onClick={() => void copyText(order.orderId).then(flashCopy)}>
-              Copy order ID
-            </button>
-            {order.tokenNumber != null ? (
-              <button
-                type="button"
-                className="btnGhost"
-                onClick={() => void copyText(String(order.tokenNumber)).then(flashCopy)}
-              >
-                Copy token
-              </button>
+            {recent.length > 0 ? (
+              <div className="recentBlock">
+                <p className="recentBlock__label">Recent</p>
+                <div className="recentChips">
+                  {recent.map((r) => (
+                    <button
+                      key={`${r.ref}-${r.at}`}
+                      type="button"
+                      className="recentChip"
+                      onClick={() => void lookup(r.ref)}
+                    >
+                      {r.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
             ) : null}
-            <button type="button" className="btnGhost btnGhost--print" onClick={() => window.print()}>
-              Print / PDF
-            </button>
+
+            <p className="hint" style={{ marginBottom: 0 }}>Counter customers see a token (e.g. 1001). Full UUID works for any order channel.</p>
           </div>
 
-          {order.tokenNumber != null ? (
-            <div className="token">
-              <p className="token__label">Counter queue</p>
-              <p className="token__num">#{order.tokenNumber}</p>
-            </div>
-          ) : null}
+          {error ? <div className="err">{error}</div> : null}
+          {copyToast ? <div className="copyToast">{copyToast}</div> : null}
+        </div>
 
-          <div className="card receiptCard">
-            <span className={`badge${order.paid ? " badge--paid" : " badge--wait"}`}>
-              {order.paid ? "Paid" : "Awaiting payment"}
-            </span>
-            <p className="card__title">Order {order.orderId.slice(0, 8)}…</p>
-            <ul className="lines">
-              {order.lines.map((line, i) => (
-                <li key={`${line.name}-${i}`} className="line">
-                  <div>
-                    {line.name}
-                    <span className="line__meta">
-                      {line.qty} × ₹{line.unitPrice} · tax {line.taxPercent}%
-                    </span>
+        <div className="cashierWorkspace__right">
+          {order ? (
+            <div className="receiptSection">
+              <div className="actionBar">
+                <button type="button" className="btnGhost" onClick={() => void newLookup()}>
+                  New lookup
+                </button>
+                <button type="button" className="btnGhost" onClick={() => void copyText(order.orderId).then(flashCopy)}>
+                  Copy order ID
+                </button>
+                {order.tokenNumber != null ? (
+                  <button
+                    type="button"
+                    className="btnGhost"
+                    onClick={() => void copyText(String(order.tokenNumber)).then(flashCopy)}
+                  >
+                    Copy token
+                  </button>
+                ) : null}
+                <button type="button" className="btnGhost btnGhost--print" onClick={() => window.print()}>
+                  Print / PDF
+                </button>
+              </div>
+
+              {order.tokenNumber != null ? (
+                <div className="token">
+                  <p className="token__label">Counter queue</p>
+                  <p className="token__num">#{order.tokenNumber}</p>
+                </div>
+              ) : null}
+
+              <div className="card receiptCard">
+                <span className={`badge${order.paid ? " badge--paid" : " badge--wait"}`}>
+                  {order.paid ? "Paid" : "Awaiting payment"}
+                </span>
+                <p className="card__title">Order {order.orderId.slice(0, 8)}…</p>
+                <ul className="lines">
+                  {order.lines.map((line, i) => (
+                    <li key={`${line.name}-${i}`} className="line">
+                      <div>
+                        {line.name}
+                        <span className="line__meta">
+                          {line.qty} × ₹{line.unitPrice} · tax {line.taxPercent}%
+                        </span>
+                      </div>
+                      <div>₹{line.lineTotal.toFixed(2)}</div>
+                    </li>
+                  ))}
+                </ul>
+                <div className="totals">
+                  <div className="totalRow">
+                    <span>Subtotal (excl. tax)</span>
+                    <span>₹{order.subtotal.toFixed(2)}</span>
                   </div>
-                  <div>₹{line.lineTotal.toFixed(2)}</div>
-                </li>
-              ))}
-            </ul>
-            <div className="totals">
-              <div className="totalRow">
-                <span>Subtotal (excl. tax)</span>
-                <span>₹{order.subtotal.toFixed(2)}</span>
+                  <div className="totalRow">
+                    <span>Tax</span>
+                    <span>₹{order.taxTotal.toFixed(2)}</span>
+                  </div>
+                  <div className="totalRow totalRow--grand">
+                    <span>Total due</span>
+                    <span>₹{order.grandTotal.toFixed(2)}</span>
+                  </div>
+                </div>
               </div>
-              <div className="totalRow">
-                <span>Tax</span>
-                <span>₹{order.taxTotal.toFixed(2)}</span>
-              </div>
-              <div className="totalRow totalRow--grand">
-                <span>Total due</span>
-                <span>₹{order.grandTotal.toFixed(2)}</span>
-              </div>
+
+              {order.paymentMode === "COUNTER" && !order.paid ? (
+                <button type="button" className="btn btn--xl" disabled={loading} onClick={() => void settle()}>
+                  Record payment at counter
+                </button>
+              ) : null}
+
+              {order.paymentMode === "COUNTER" && order.paid ? (
+                <p className="hint" style={{ textAlign: "center" }}>
+                  This order is already marked paid.
+                </p>
+              ) : null}
+
+              {order.paymentMode === "ONLINE" ? (
+                <p className="hint" style={{ textAlign: "center" }}>
+                  Online payment orders are settled via the payment provider, not this screen.
+                </p>
+              ) : null}
+
+              {settleMsg ? <div className="card settleBanner">{settleMsg}</div> : null}
             </div>
-          </div>
-
-          {order.paymentMode === "COUNTER" && !order.paid ? (
-            <button type="button" className="btn btn--xl" disabled={loading} onClick={() => void settle()}>
-              Record payment at counter
-            </button>
-          ) : null}
-
-          {order.paymentMode === "COUNTER" && order.paid ? (
-            <p className="hint" style={{ textAlign: "center" }}>
-              This order is already marked paid.
-            </p>
-          ) : null}
-
-          {order.paymentMode === "ONLINE" ? (
-            <p className="hint" style={{ textAlign: "center" }}>
-              Online payment orders are settled via the payment provider, not this screen.
-            </p>
-          ) : null}
-
-          {settleMsg ? <div className="card settleBanner">{settleMsg}</div> : null}
-        </>
-      ) : null}
+          ) : (
+            <div className="card emptyReceiptCard" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "48px 24px", minHeight: "260px" }}>
+              <p className="emptyHint" style={{ textAlign: "center", color: "var(--muted)", margin: 0, fontSize: "14px", lineHeight: "1.6" }}>
+                Select a pending order from the queue or search using the lookup tool to view details and process checkout payments here.
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

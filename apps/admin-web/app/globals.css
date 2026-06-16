@@ -95,6 +95,8 @@ a {
   border-radius: var(--radius);
   padding: 20px;
   box-shadow: var(--shadow);
+  min-width: 0;
+  max-width: 100%;
 }
 
 .panel h3 {
@@ -206,7 +208,7 @@ button.secondary {
 
 @media (max-width: 920px) {
   .grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -555,7 +557,7 @@ button.secondary {
 
 @media (max-width: 1100px) {
   .analysisGrid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -1491,4 +1493,483 @@ button.secondary {
   flex-direction: column;
   gap: 6px;
   align-items: stretch;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #barcode-print-area, #barcode-print-area * {
+    visibility: visible;
+  }
+  #barcode-print-area {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    border: none !important;
+    padding: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    height: auto !important;
+    background: white !important;
+    color: black !important;
+  }
+  @page {
+    size: auto;
+    margin: 0;
+  }
+}
+
+/* ==========================================================================
+   SeamLine Operations Sidebar & Mobile Responsive Layout Redesign
+   ========================================================================== */
+
+/* Layout structure */
+.adminShell {
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  overflow-x: hidden;
+}
+
+/* Sidebar brand logo using Syne font */
+.adminSidebar__brand {
+  font-family: "Syne", sans-serif;
+  font-size: 22px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  display: flex;
+  gap: 2px;
+  margin-bottom: 8px;
+}
+
+.adminSidebar__brand .brandZipp {
+  color: var(--olive);
+}
+
+.adminSidebar__brand .brandMart {
+  color: var(--orange);
+}
+
+.adminSidebar__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  padding: 16px;
+  border-radius: 14px;
+}
+
+.adminRolePill {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--olive-dark);
+  background: var(--olive-soft);
+  border: 1px solid rgba(197, 168, 128, 0.2);
+  padding: 4px 10px;
+  border-radius: 99px;
+  width: fit-content;
+}
+
+.adminSidebar__label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.adminSelect--store {
+  width: 100% !important;
+  min-width: 0 !important;
+  flex: none !important;
+  height: 40px !important;
+  padding: 0 10px;
+  font-size: 13px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.adminBtn--full {
+  width: 100%;
+}
+
+/* Base layouts */
+.adminContainer {
+  display: flex;
+  flex-direction: column;
+}
+
+.adminSidebar {
+  width: 100%;
+  padding: 24px 20px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.adminMain {
+  width: 100%;
+  max-width: 100%;
+  padding: 24px 16px 48px;
+}
+
+/* Sidebar vertical nav on desktop, horizontal buttons on mobile */
+.adminNav {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 8px;
+  margin-bottom: 0;
+}
+
+.adminNav__item {
+  min-height: 54px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 2px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  cursor: pointer;
+  box-shadow: none;
+  transition: all 0.2s ease;
+  width: 100%;
+}
+
+.adminNav__item:hover {
+  background: var(--olive-soft);
+  border-color: var(--olive);
+}
+
+.adminNav__item--active {
+  background: var(--olive) !important;
+  border-color: var(--olive) !important;
+  color: #0b0f19 !important;
+}
+
+.adminNav__item--active .adminNav__label {
+  color: #0b0f19 !important;
+}
+
+.adminNav__item--active .adminNav__hint {
+  color: rgba(11, 15, 25, 0.6) !important;
+}
+
+.adminNav__label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.adminNav__hint {
+  font-size: 10px;
+  color: var(--muted);
+}
+
+/* Desktop layout styles */
+@media (min-width: 1025px) {
+  .adminContainer {
+    flex-direction: row;
+  }
+
+  .adminSidebar {
+    width: 280px;
+    height: 100vh;
+    position: sticky;
+    top: 0;
+    border-bottom: none;
+    border-right: 1px solid var(--line);
+    padding: 32px 24px;
+    gap: 24px;
+    flex-shrink: 0;
+  }
+
+  .adminMain {
+    flex: 1;
+    min-width: 0;
+    padding: 40px 48px;
+  }
+
+  .adminNav {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .adminNav__item {
+    min-height: 46px;
+    padding: 10px 16px;
+    border-radius: 12px;
+    border: 1px solid transparent;
+    background: transparent;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 12px;
+    width: 100%;
+  }
+
+  .adminNav__item:hover {
+    background: var(--surface-2);
+    border-color: var(--line);
+  }
+
+  .adminNav__item--active {
+    background: var(--surface-2) !important;
+    border-color: var(--line) !important;
+    color: var(--olive-dark) !important;
+  }
+
+  .adminNav__item--active::before {
+    content: "";
+    width: 4px;
+    height: 16px;
+    background: var(--olive);
+    border-radius: 99px;
+    margin-right: -4px;
+  }
+
+  .adminNav__item--active .adminNav__label {
+    color: var(--olive-dark) !important;
+  }
+
+  .adminNav__hint {
+    display: none;
+  }
+}
+
+/* Responsive Table-to-Card Styles */
+.adminDesktopTable {
+  display: block;
+}
+
+.adminMobileCards {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .adminDesktopTable {
+    display: none;
+  }
+
+  .adminMobileCards {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .adminInvCard {
+    background: var(--surface);
+    border: 2px solid var(--line);
+    border-radius: var(--radius);
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    box-shadow: var(--shadow);
+  }
+
+  .adminInvCard--hot {
+    border-color: rgba(244, 63, 94, 0.35);
+  }
+
+  .adminInvCard__header {
+    display: flex;
+    gap: 14px;
+    align-items: center;
+  }
+
+  .adminInvCard__thumb {
+    width: 50px;
+    height: 50px;
+    border-radius: 8px;
+    object-fit: cover;
+    border: 1px solid var(--line);
+    background: var(--surface-2);
+    flex-shrink: 0;
+  }
+
+  .adminInvCard__thumb--empty {
+    display: block;
+    background: linear-gradient(135deg, var(--surface-2), var(--surface));
+  }
+
+  .adminInvCard__titleSection {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .adminInvCard__name {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .adminInvCard__sub {
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .adminInvCard__brand {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--olive-dark);
+  }
+
+  .adminInvCard__details {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px 12px;
+    padding: 12px;
+    background: var(--surface-2);
+    border-radius: 10px;
+    font-size: 13px;
+  }
+
+  .adminInvCard__row {
+    display: flex;
+    justify-content: space-between;
+    gap: 6px;
+  }
+
+  .adminInvCard__stock {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    text-align: center;
+    border-top: 1px solid var(--line);
+    padding-top: 12px;
+  }
+
+  .adminInvCard__stockItem {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .adminInvCard__stockLabel {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--muted);
+    letter-spacing: 0.05em;
+  }
+
+  .adminInvCard__stockValue {
+    font-size: 16px;
+    font-weight: 800;
+  }
+
+  .adminInvCard__actions {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    border-top: 1px solid var(--line);
+    padding-top: 14px;
+  }
+
+  .adminInvCard__actions .adminBtn {
+    width: 100%;
+    padding: 8px 6px;
+    font-size: 11px;
+    min-height: 32px;
+  }
+}
+
+/* Fix dropdown height stretch in flex column */
+.adminSelect--store {
+  width: 100% !important;
+  min-width: 0 !important;
+  flex: none !important;
+  height: 40px !important;
+  padding: 0 10px;
+  font-size: 13px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+/* Metrics Grid stacking for small devices - prevent table overflow */
+@media (max-width: 520px) {
+  .metricsGrid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  
+  .analysisGrid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+
+/* Mobile Header & Collapsible Drawer styles */
+.adminMobileHeader {
+  display: none;
+}
+
+@media (max-width: 1024px) {
+  .adminMobileHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--line);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .adminMobileHeader__toggle {
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    color: var(--text);
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+
+  .adminMobileHeader__toggle:hover {
+    background: var(--olive-soft);
+  }
+
+  .adminSidebar {
+    display: none; /* Hidden on mobile by default */
+    width: 100%;
+    border-bottom: 1px solid var(--line);
+    padding: 20px;
+    background: var(--surface);
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .adminSidebar.adminSidebar--open {
+    display: flex !important;
+  }
 }

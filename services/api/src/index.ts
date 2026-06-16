@@ -16,10 +16,22 @@ import {
   uploadProductImageToStorage
 } from "./storage/productImages";
 import {
+  adjustProductStock,
+  commitSale,
+  ConcurrentStockError,
+  InsufficientStockError,
+  listStockMovements,
+  releaseExpiredReservations,
+  releaseOrderReservations,
+  reserveOrderFromSession,
+  restockRefund,
+  syncSessionReservations,
+  withTransaction
+} from "./db/inventory";
+import {
   createOrder,
   createProduct,
   createSession,
-  decrementStock,
   deleteDiscount,
   findProductByBarcode,
   findProductById,
@@ -31,7 +43,6 @@ import {
   getOrderByToken,
   getReceiptByOrderId,
   getSession,
-  incrementStock,
   insertReceipt,
   isExitTokenUsed,
   listAudit,
@@ -49,7 +60,6 @@ import {
   updateOrderPaid,
   updateOrderRefunded,
   updateOrderVoided,
-  updateProductStock,
   updateProductImage,
   type Order,
   type OrderLineSnapshot,
@@ -134,21 +144,57 @@ async function toCustomerProduct(p: Product) {
   return {
     id: p.id,
     barcode: p.barcode,
+    sku: p.sku,
     name: p.name,
     category: p.category,
+    styleCode: p.styleCode,
+    size: p.size,
+    color: p.color,
+    brand: p.brand,
+    season: p.season,
+    gender: p.gender,
     unitPrice: effective,
     listPrice: p.unitPrice,
     discountPercent: d,
     taxPercent: p.taxPercent,
     demandScore: p.demandScore,
-    inStock: p.inStock,
+    inStock: p.availableQty,
     imageUrl: p.imageUrl ?? undefined
   };
 }
 
+function stockErrorResponse(res: Response, e: unknown) {
+  if (e instanceof InsufficientStockError) {
+    return res.status(409).json({ message: e.message, code: "INSUFFICIENT_STOCK", productId: e.productId });
+  }
+  if (e instanceof ConcurrentStockError) {
+    return res.status(409).json({ message: e.message, code: "CONCURRENT_STOCK" });
+  }
+  return null;
+}
+
+async function persistSessionCart(session: Session): Promise<void> {
+  await saveSessionCart(session.id, session.cart);
+  await syncSessionReservations(
+    session.id,
+    session.storeId,
+    session.cart,
+    new Date(session.expiresAt)
+  );
+}
+
 async function computeCart(session: Session) {
+  const phone = (session.customerPhone ?? "").replace(/\D/g, "");
+  let loyaltyDiscountPct = 0;
+  if (phone.endsWith("77") || phone.endsWith("99")) {
+    loyaltyDiscountPct = 10;
+  } else if (phone.endsWith("00") || phone.endsWith("55")) {
+    loyaltyDiscountPct = 5;
+  }
+
   let subtotal = 0;
   let taxTotal = 0;
+  let loyaltyDiscount = 0;
   const lines: Array<{
     productId: string;
     barcode: string;
@@ -156,6 +202,8 @@ async function computeCart(session: Session) {
     qty: number;
     unitPrice: number;
     taxPercent: number;
+    lineSubtotal: number;
+    lineTax: number;
     lineTotal: number;
   }> = [];
 
@@ -165,9 +213,16 @@ async function computeCart(session: Session) {
     const d = await getDiscountPercent(productId);
     const unit = shelfUnitPrice(product, d);
     const lineSubtotal = unit * qty;
-    const lineTax = (lineSubtotal * product.taxPercent) / 100;
+    
+    // Apply loyalty discount to pre-tax price
+    const discountAmount = lineSubtotal * (loyaltyDiscountPct / 100);
+    const discountedLineSubtotal = lineSubtotal - discountAmount;
+    const lineTax = (discountedLineSubtotal * product.taxPercent) / 100;
+
     subtotal += lineSubtotal;
+    loyaltyDiscount += discountAmount;
     taxTotal += lineTax;
+
     lines.push({
       productId: product.id,
       barcode: product.barcode,
@@ -175,11 +230,20 @@ async function computeCart(session: Session) {
       qty,
       unitPrice: unit,
       taxPercent: product.taxPercent,
-      lineTotal: lineSubtotal + lineTax
+      lineSubtotal: discountedLineSubtotal,
+      lineTax,
+      lineTotal: discountedLineSubtotal + lineTax
     });
   }
 
-  return { items: lines, subtotal, taxTotal, grandTotal: subtotal + taxTotal };
+  return {
+    items: lines,
+    subtotal,
+    taxTotal,
+    loyaltyDiscount,
+    loyaltyDiscountPercent: loyaltyDiscountPct,
+    grandTotal: Math.max(0, (subtotal - loyaltyDiscount) + taxTotal)
+  };
 }
 
 function orderPublicView(order: Order) {
@@ -223,11 +287,11 @@ function receiptEmailHtml(order: Order, receiptNumber: string): string {
     )
     .join("");
   return `<!DOCTYPE html><html><body style="font-family:sans-serif;color:#111">
-<h2>ZippMart receipt</h2>
+<h2>SeamLine receipt</h2>
 <p><strong>${receiptNumber}</strong> · ${order.storeCode}</p>
 <table cellpadding="6" cellspacing="0" border="0">${rows}</table>
 <p>Subtotal: ₹${order.subtotal.toFixed(2)}<br>Tax: ₹${order.taxTotal.toFixed(2)}<br><strong>Total: ₹${order.total.toFixed(2)}</strong></p>
-<p>Thank you for shopping with ZippMart.</p>
+<p>Thank you for shopping with SeamLine.</p>
 </body></html>`;
 }
 
@@ -244,7 +308,7 @@ async function sendReceiptEmail(order: Order, receiptNumber: string): Promise<bo
       body: JSON.stringify({
         from: emailFrom,
         to: [to],
-        subject: `Your ZippMart receipt ${receiptNumber}`,
+        subject: `Your SeamLine receipt ${receiptNumber}`,
         html: receiptEmailHtml(order, receiptNumber)
       })
     });
@@ -260,10 +324,15 @@ async function sendReceiptEmail(order: Order, receiptNumber: string): Promise<bo
 }
 
 async function recordPaidOrder(order: Order, whatsapp: string | null, auditActor: string, auditRole: string): Promise<string> {
-  for (const line of order.lines) {
-    await decrementStock(line.productId, line.qty);
-  }
-  await updateOrderPaid(order.id, true);
+  await withTransaction(async (client) => {
+    await commitSale(
+      order.id,
+      order.lines.map((l) => ({ productId: l.productId, qty: l.qty })),
+      auditActor,
+      client
+    );
+    await updateOrderPaid(order.id, true, client);
+  });
   order.paid = true;
   const receiptId = `rcpt_${Date.now()}`;
   const receiptNumber = `SM-${Date.now()}`;
@@ -433,7 +502,21 @@ app.get("/v1/customer/products", async (req, res) => {
       const name = p.name.toLowerCase();
       const barcode = (p.barcode ?? "").toLowerCase();
       const category = (p.category ?? "").toLowerCase();
-      return name.includes(query) || barcode.includes(query) || category.includes(query);
+      const style = (p.styleCode ?? "").toLowerCase();
+      const size = (p.size ?? "").toLowerCase();
+      const color = (p.color ?? "").toLowerCase();
+      const brand = (p.brand ?? "").toLowerCase();
+      const sku = (p.sku ?? "").toLowerCase();
+      return (
+        name.includes(query) ||
+        barcode.includes(query) ||
+        category.includes(query) ||
+        style.includes(query) ||
+        size.includes(query) ||
+        color.includes(query) ||
+        brand.includes(query) ||
+        sku.includes(query)
+      );
     });
   }
   res.json(await Promise.all(products.map(toCustomerProduct)));
@@ -442,34 +525,42 @@ app.get("/v1/customer/products", async (req, res) => {
 app.post("/v1/customer/cart/items", async (req, res) => {
   const parsed = addCartItemSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json(parsed.error.flatten());
-  const session = await getSession(parsed.data.sessionId);
-  if (!session) return res.status(404).json({ message: "Session not found" });
-  const product = await findProductByBarcode(parsed.data.barcode);
-  if (!product) return res.status(404).json({ message: "Product not found" });
-  const currentQty = session.cart.get(product.id) ?? 0;
-  if (product.inStock < currentQty + parsed.data.quantity) {
-    return res.status(400).json({ message: "Not enough stock for this quantity" });
+  try {
+    const session = await getSession(parsed.data.sessionId);
+    if (!session) return res.status(404).json({ message: "Session not found" });
+    const product = await findProductByBarcode(parsed.data.barcode);
+    if (!product) return res.status(404).json({ message: "Product not found" });
+    const currentQty = session.cart.get(product.id) ?? 0;
+    session.cart.set(product.id, currentQty + parsed.data.quantity);
+    await persistSessionCart(session);
+    return res.json(await computeCart(session));
+  } catch (e) {
+    const handled = stockErrorResponse(res, e);
+    if (handled) return handled;
+    throw e;
   }
-  session.cart.set(product.id, currentQty + parsed.data.quantity);
-  await saveSessionCart(session.id, session.cart);
-  return res.json(await computeCart(session));
 });
 
 app.patch("/v1/customer/cart/items", async (req, res) => {
   const parsed = setCartLineQtySchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json(parsed.error.flatten());
-  const session = await getSession(parsed.data.sessionId);
-  if (!session) return res.status(404).json({ message: "Session not found" });
-  const { productId, quantity } = parsed.data;
-  if (quantity === 0) session.cart.delete(productId);
-  else {
-    const product = await findProductById(productId);
-    if (!product) return res.status(404).json({ message: "Product not found" });
-    if (quantity > product.inStock) return res.status(400).json({ message: "Not enough stock for this quantity" });
-    session.cart.set(productId, quantity);
+  try {
+    const session = await getSession(parsed.data.sessionId);
+    if (!session) return res.status(404).json({ message: "Session not found" });
+    const { productId, quantity } = parsed.data;
+    if (quantity === 0) session.cart.delete(productId);
+    else {
+      const product = await findProductById(productId);
+      if (!product) return res.status(404).json({ message: "Product not found" });
+      session.cart.set(productId, quantity);
+    }
+    await persistSessionCart(session);
+    return res.json(await computeCart(session));
+  } catch (e) {
+    const handled = stockErrorResponse(res, e);
+    if (handled) return handled;
+    throw e;
   }
-  await saveSessionCart(session.id, session.cart);
-  return res.json(await computeCart(session));
 });
 
 app.get("/v1/customer/cart/:sessionId", async (req, res) => {
@@ -491,17 +582,15 @@ app.post("/v1/customer/checkout", async (req, res) => {
     if (cart.items.length === 0) return res.status(400).json({ message: "Cart is empty" });
 
     const lines: OrderLineSnapshot[] = cart.items.map((row) => {
-      const lineSubtotal = row.unitPrice * row.qty;
-      const lineTax = (lineSubtotal * row.taxPercent) / 100;
       return {
         productId: row.productId,
         name: row.name,
         qty: row.qty,
         unitPrice: row.unitPrice,
         taxPercent: row.taxPercent,
-        lineSubtotal,
-        lineTax,
-        lineTotal: lineSubtotal + lineTax
+        lineSubtotal: row.lineSubtotal,
+        lineTax: row.lineTax,
+        lineTotal: row.lineTotal
       };
     });
 
@@ -511,7 +600,7 @@ app.post("/v1/customer/checkout", async (req, res) => {
       sessionId: session.id,
       storeCode: session.storeCode,
       total: cart.grandTotal,
-      subtotal: cart.subtotal,
+      subtotal: cart.subtotal - (cart.loyaltyDiscount ?? 0),
       taxTotal: cart.taxTotal,
       lines,
       paymentMode: parsed.data.paymentMode,
@@ -527,7 +616,28 @@ app.post("/v1/customer/checkout", async (req, res) => {
       order.tokenNumber = await nextCounterToken();
     }
 
-    await createOrder(order);
+    const storeId = session.storeId;
+    const holdUntil = new Date(Date.now() + 45 * 60 * 1000);
+
+    await withTransaction(async (client) => {
+      await releaseExpiredReservations(client);
+      await syncSessionReservations(
+        session.id,
+        session.storeId,
+        session.cart,
+        new Date(session.expiresAt),
+        client
+      );
+      await reserveOrderFromSession(
+        session.id,
+        orderId,
+        storeId,
+        lines.map((l) => ({ productId: l.productId, qty: l.qty })),
+        holdUntil,
+        client
+      );
+      await createOrder(order, client);
+    });
 
     session.cart.clear();
     await saveSessionCart(session.id, session.cart);
@@ -547,6 +657,8 @@ app.post("/v1/customer/checkout", async (req, res) => {
     });
   } catch (e) {
     console.error("checkout failed", e);
+    const handled = stockErrorResponse(res, e);
+    if (handled) return handled;
     const detail = e instanceof Error ? e.message : String(e);
     if (detail.includes("Unknown store")) {
       return res.status(400).json({ message: "This store is not set up yet. Ask staff for help." });
@@ -687,8 +799,14 @@ app.post("/v1/cashier/orders/:orderId/settle", requireCashierKey, async (req, re
   if (order.paymentMode !== "COUNTER") return res.status(400).json({ message: "Not a counter-pay order" });
   if (order.paid) return res.status(400).json({ message: "Already marked as paid" });
   if (order.voided || order.refunded) return res.status(400).json({ message: "Order is voided or refunded" });
-  const receiptId = await recordPaidOrder(order, null, "cashier", "staff");
-  return res.json({ ok: true, receiptId, orderId: order.id });
+  try {
+    const receiptId = await recordPaidOrder(order, null, "cashier", "staff");
+    return res.json({ ok: true, receiptId, orderId: order.id });
+  } catch (e) {
+    const handled = stockErrorResponse(res, e);
+    if (handled) return handled;
+    throw e;
+  }
 });
 
 app.post("/v1/payments/razorpay/webhook", async (req, res) => {
@@ -733,18 +851,28 @@ app.post("/v1/admin/products", requireAuth("staff"), async (req, res) => {
   if (existing) return res.status(409).json({ message: "A product with this barcode already exists" });
   if (!Number.isFinite(cost) || cost < 0) return res.status(400).json({ message: "costPrice must be a non-negative number" });
   if (cost > sell) return res.status(400).json({ message: "costPrice should not exceed selling price" });
-  const created = await createProduct({
-    barcode: String(body.barcode).trim(),
-    name: String(body.name),
-    category: String(body.category),
-    unitPrice: Math.round(sell * 100) / 100,
-    costPrice: Math.round(cost * 100) / 100,
-    taxPercent: Number(body.taxPercent ?? 5),
-    inStock: Math.max(0, Math.floor(Number(body.inStock ?? 0))),
-    demandScore: Math.max(0, Number(body.demandScore ?? 0)),
-    imageUrl: typeof body.imageUrl === "string" ? body.imageUrl.trim() : undefined
-  });
   const actor = (req as Request & { staff?: { sub: string } }).staff?.sub ?? "staff";
+  const created = await createProduct(
+    {
+      barcode: String(body.barcode).trim(),
+      name: String(body.name),
+      category: String(body.category),
+      styleCode: String(body.styleCode ?? ""),
+      size: String(body.size ?? ""),
+      color: String(body.color ?? ""),
+      brand: String(body.brand ?? ""),
+      season: String(body.season ?? ""),
+      gender: String(body.gender ?? "Unisex"),
+      unitPrice: Math.round(sell * 100) / 100,
+      costPrice: Math.round(cost * 100) / 100,
+      taxPercent: Number(body.taxPercent ?? 5),
+      inStock: Math.max(0, Math.floor(Number(body.inStock ?? 0))),
+      reorderLevel: Math.max(0, Math.floor(Number(body.reorderLevel ?? 10))),
+      demandScore: Math.max(0, Number(body.demandScore ?? 0)),
+      imageUrl: typeof body.imageUrl === "string" ? body.imageUrl.trim() : undefined
+    },
+    actor
+  );
   await pushAudit(actor, "staff", "product.create", `${created.barcode} ${created.name}`);
   const d = await getDiscountPercent(created.id);
   const eff = shelfUnitPrice(created, d);
@@ -759,11 +887,29 @@ app.post("/v1/admin/products", requireAuth("staff"), async (req, res) => {
 
 app.patch("/v1/admin/products/:id/inventory", requireAuth("staff"), async (req, res) => {
   const inStock = Math.max(0, Math.floor(Number(req.body.inStock ?? 0)));
-  const product = await updateProductStock(pathParam(req.params.id), inStock);
-  if (!product) return res.status(404).json({ message: "Product not found" });
+  const note = String(req.body?.note ?? "").trim() || "Manual stock adjustment";
   const actor = (req as Request & { staff?: { sub: string } }).staff?.sub ?? "staff";
-  await pushAudit(actor, "staff", "inventory.patch", `${product.id}=${product.inStock}`);
-  return res.json(product);
+  try {
+    await adjustProductStock(pathParam(req.params.id), inStock, actor, note);
+    const product = await findProductById(pathParam(req.params.id));
+    if (!product) return res.status(404).json({ message: "Product not found" });
+    await pushAudit(actor, "staff", "inventory.patch", `${product.id}=${product.inStock} (${note})`);
+    return res.json(product);
+  } catch (e) {
+    const handled = stockErrorResponse(res, e);
+    if (handled) return handled;
+    if (e instanceof Error && e.message === "Product not found") {
+      return res.status(404).json({ message: "Product not found" });
+    }
+    throw e;
+  }
+});
+
+app.get("/v1/admin/inventory/movements", requireAuth("staff"), async (req, res) => {
+  const raw = Number(req.query.limit);
+  const limit = Number.isFinite(raw) ? Math.min(500, Math.max(1, Math.floor(raw))) : 100;
+  const productId = String(req.query.productId ?? "").trim() || undefined;
+  res.json(await listStockMovements(limit, productId));
 });
 
 app.post("/v1/admin/upload/product-image", requireAuth("staff"), async (req, res) => {
@@ -824,7 +970,10 @@ app.post("/v1/admin/orders/:orderId/void", requireAuth("manager"), async (req, r
   if (order.refunded) return res.status(400).json({ message: "Refunded order cannot be voided" });
   if (order.paid) return res.status(400).json({ message: "Paid order — use refund to reverse stock" });
   if (order.voided) return res.status(400).json({ message: "Already voided" });
-  await updateOrderVoided(order.id, true);
+  await withTransaction(async (client) => {
+    await releaseOrderReservations(order.id, client);
+    await updateOrderVoided(order.id, true, client);
+  });
   const actor = (req as Request & { staff?: { sub: string } }).staff?.sub ?? "manager";
   await pushAudit(actor, "manager", "order.void", order.id);
   return res.json({ ok: true });
@@ -836,9 +985,16 @@ app.post("/v1/admin/orders/:orderId/refund", requireAuth("manager"), async (req,
   if (!order.paid) return res.status(400).json({ message: "Order is not paid — void instead if still open" });
   if (order.refunded) return res.status(400).json({ message: "Already refunded" });
   if (order.voided) return res.status(400).json({ message: "Voided order" });
-  for (const line of order.lines) await incrementStock(line.productId, line.qty);
-  await updateOrderRefunded(order.id);
   const actor = (req as Request & { staff?: { sub: string } }).staff?.sub ?? "manager";
+  await withTransaction(async (client) => {
+    await restockRefund(
+      order.id,
+      order.lines.map((l) => ({ productId: l.productId, qty: l.qty })),
+      actor,
+      client
+    );
+    await updateOrderRefunded(order.id, client);
+  });
   await pushAudit(actor, "manager", "order.refund", order.id);
   return res.json({ ok: true });
 });
@@ -861,9 +1017,45 @@ app.get("/v1/admin/export/orders.csv", requireAuth("manager"), async (req, res) 
 
 app.get("/v1/admin/export/products.csv", requireAuth("staff"), async (_req, res) => {
   const products = await listProducts();
-  const header = ["id", "barcode", "name", "category", "unitPrice", "costPrice", "taxPercent", "inStock"].join(",");
+  const header = [
+    "id",
+    "barcode",
+    "sku",
+    "name",
+    "category",
+    "styleCode",
+    "size",
+    "color",
+    "brand",
+    "season",
+    "gender",
+    "unitPrice",
+    "costPrice",
+    "taxPercent",
+    "inStock"
+  ].join(",");
   const body = products
-    .map((p) => [p.id, p.barcode, p.name, p.category, p.unitPrice, p.costPrice, p.taxPercent, p.inStock].map(csvEscape).join(","))
+    .map((p) =>
+      [
+        p.id,
+        p.barcode,
+        p.sku,
+        p.name,
+        p.category,
+        p.styleCode,
+        p.size,
+        p.color,
+        p.brand,
+        p.season,
+        p.gender,
+        p.unitPrice,
+        p.costPrice,
+        p.taxPercent,
+        p.inStock
+      ]
+        .map(csvEscape)
+        .join(",")
+    )
     .join("\n");
   res.setHeader("Content-Type", "text/csv; charset=utf-8");
   res.setHeader("Content-Disposition", `attachment; filename="products-${Date.now()}.csv"`);
@@ -946,7 +1138,7 @@ app.get("/v1/admin/receipts", requireAuth("staff"), async (_req, res) => {
 async function maybeNotifyLowStockWebhook() {
   if (!lowStockNotifyWebhook) return;
   const products = await listProducts();
-  const skus = products.filter((p) => p.inStock < 15);
+  const skus = products.filter((p) => p.availableQty < 5);
   if (skus.length === 0) return;
   try {
     await fetch(lowStockNotifyWebhook, {
@@ -956,7 +1148,7 @@ async function maybeNotifyLowStockWebhook() {
         type: "low_stock_scheduled",
         at: new Date().toISOString(),
         count: skus.length,
-        skus: skus.map((p) => ({ barcode: p.barcode, name: p.name, inStock: p.inStock }))
+        skus: skus.map((p) => ({ barcode: p.barcode, name: p.name, inStock: p.inStock, available: p.availableQty, reserved: p.reservedQty }))
       })
     });
     await pushAudit("scheduler", "system", "low_stock.webhook", String(skus.length));
@@ -967,6 +1159,11 @@ async function maybeNotifyLowStockWebhook() {
 
 const lowStockIntervalMs = Number(process.env.LOW_STOCK_CHECK_INTERVAL_MS ?? 6 * 60 * 60 * 1000);
 setInterval(() => void maybeNotifyLowStockWebhook(), lowStockIntervalMs);
+
+const reservationSweepMs = Number(process.env.RESERVATION_SWEEP_INTERVAL_MS ?? 5 * 60 * 1000);
+setInterval(() => {
+  void releaseExpiredReservations().catch((e) => console.error("reservation sweep failed", e));
+}, reservationSweepMs);
 
 async function main() {
   await verifyDb();

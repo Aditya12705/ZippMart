@@ -1,20 +1,29 @@
-@import url("https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@9..144,500;9..144,600;9..144,700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Syne:wght@600;700;800&family=Fraunces:ital,opsz,wght@9..144,500;9..144,600;9..144,700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap");
 
 :root {
-  color-scheme: light;
-  --bg: #f4efe6;
-  --surface: #fdfcfa;
-  --surface-2: #f0ebe3;
-  --olive: #5c6648;
-  --olive-dark: #454e38;
-  --orange: #d97736;
-  --text: #2c2a26;
-  --muted: #6b6560;
-  --line: rgba(44, 42, 38, 0.12);
-  --shadow: 0 12px 36px rgba(44, 42, 38, 0.08);
+  color-scheme: dark;
+  --bg: #0b0f19;
+  --bg-deep: #050811;
+  --surface: #131b2e;
+  --surface-2: #1e294b;
+  --olive: #c5a880;
+  --olive-dark: #e5cfa3;
+  --olive-soft: rgba(197, 168, 128, 0.12);
+  --orange: #f43f5e;
+  --orange-soft: rgba(244, 63, 94, 0.14);
+  --lime: #10b981;
+  --lime-soft: rgba(16, 185, 129, 0.2);
+  --cyan: #38bdf8;
+  --text: #f8fafc;
+  --muted: #94a3b8;
+  --line: rgba(197, 168, 128, 0.15);
+  --shadow: 0 12px 36px rgba(0, 0, 0, 0.5);
   --radius: 16px;
-  --font: "Plus Jakarta Sans", system-ui, sans-serif;
-  --font-display: "Fraunces", Georgia, serif;
+  --radius-lg: 22px;
+  --font: "Outfit", "Plus Jakarta Sans", system-ui, sans-serif;
+  --font-display: "Syne", "Fraunces", Georgia, serif;
+  --danger: #f43f5e;
+  --danger-bg: rgba(244, 63, 94, 0.15);
 }
 
 * {
@@ -30,6 +39,7 @@ body {
 }
 
 .shell {
+  width: 100%;
   max-width: 520px;
   margin: 0 auto;
   padding: 20px 18px 40px;
@@ -486,14 +496,14 @@ body {
 }
 
 .gateResult--ok {
-  border-color: rgba(92, 102, 72, 0.45);
-  background: linear-gradient(160deg, #f8faf4, var(--surface));
+  border-color: rgba(16, 185, 129, 0.4);
+  background: linear-gradient(160deg, rgba(16, 185, 129, 0.08), var(--surface));
 }
 
 .gateResult--fail {
-  color: #b42318;
-  background: #fff5f5;
-  border-color: rgba(180, 35, 24, 0.25);
+  color: var(--danger);
+  background: var(--danger-bg);
+  border-color: rgba(244, 63, 94, 0.25);
 }
 
 .gateResult__eyebrow {
@@ -515,4 +525,41 @@ body {
   margin: 0 0 16px;
   font-size: 13px;
   color: var(--muted);
+}
+
+/* Split workspace layout */
+.cashierWorkspace {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+}
+
+@media (min-width: 1025px) {
+  .shell {
+    max-width: 1280px !important;
+    padding: 40px 48px;
+  }
+
+  .cashierWorkspace {
+    grid-template-columns: 1fr 480px;
+    gap: 32px;
+    align-items: start;
+  }
+
+  .cashierWorkspace__right {
+    position: sticky;
+    top: 32px;
+  }
+}
+
+.emptyReceiptCard {
+  border: 2px dashed var(--line);
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* Stat pill styling update */
+.statPill--accent {
+  border-color: rgba(197, 168, 128, 0.35) !important;
+  background: linear-gradient(160deg, var(--olive-soft), var(--surface)) !important;
 }

@@ -2,7 +2,7 @@
 # Docs: https://render.com/docs/blueprint-spec
 services:
   - type: web
-    name: zippmart-api
+    name: seamline-api
     runtime: node
     plan: free
     rootDir: services/api

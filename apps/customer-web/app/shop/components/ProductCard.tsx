@@ -66,6 +66,11 @@ export function ProductCard({
           {product.name}
         </button>
         {product.category ? <p className="productCard__cat">{product.category}</p> : null}
+        {product.size || product.color ? (
+          <p className="productCard__cat">
+            {[product.size, product.color].filter(Boolean).join(" · ")}
+          </p>
+        ) : null}
         <div className="productCard__prices">
           {onSale ? (
             <>

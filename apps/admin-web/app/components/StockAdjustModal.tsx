@@ -7,6 +7,8 @@ type Product = {
   name: string;
   barcode: string;
   inStock: number;
+  reservedQty?: number;
+  availableQty?: number;
 };
 
 type Props = {
@@ -79,7 +81,19 @@ export function StockAdjustModal({ product, busy, onClose, onSave }: Props) {
 
         <div className="adminModal__body">
           <p className="adminModal__current">
-            Current on hand: <strong>{product.inStock}</strong>
+            On hand: <strong>{product.inStock}</strong>
+            {product.reservedQty != null && product.reservedQty > 0 ? (
+              <>
+                {" "}
+                · Reserved: <strong>{product.reservedQty}</strong>
+              </>
+            ) : null}
+            {product.availableQty != null ? (
+              <>
+                {" "}
+                · Available: <strong>{product.availableQty}</strong>
+              </>
+            ) : null}
           </p>
 
           <label className="adminModal__field">
