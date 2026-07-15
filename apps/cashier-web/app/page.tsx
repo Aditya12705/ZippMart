@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { apiBase, cashierHeaders } from "../lib/api";
-const RECENT_KEY = "seamline-cashier-recent";
+const RECENT_KEY = "proflo-cashier-recent";
 const MAX_RECENT = 8;
 
 type OrderLine = {
@@ -193,7 +193,7 @@ export default function CashierHomePage() {
   return (
     <div className="shell">
       <header className="header">
-        <p className="header__eyebrow">SeamLine</p>
+        <p className="header__eyebrow">ProFlo</p>
         <h1 className="header__title">Counter</h1>
         <p className="header__sub">
           Look up queue tokens or order IDs, verify the basket, then settle cash or card at the till.

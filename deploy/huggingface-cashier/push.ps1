@@ -1,16 +1,16 @@
-# Push cashier app to Hugging Face Space ADI576/SeamLine_Cashier
+# Push cashier app to Hugging Face Space ADI576/proflo_cashier
 
 $ErrorActionPreference = "Stop"
 $Root = Resolve-Path (Join-Path $PSScriptRoot "..\..")
-$SpaceDir = Join-Path $env:TEMP "seamline-hf-cashier"
-$SpaceUrl = "https://huggingface.co/spaces/ADI576/SeamLine_Cashier"
+$SpaceDir = Join-Path $env:TEMP "proflo-hf-cashier"
+$SpaceUrl = "https://huggingface.co/spaces/ADI576/proflo_cashier"
 
 $SkipNames = @(".git", "node_modules", ".next", "dist")
 
 $Token = $env:HF_TOKEN
 if (-not $Token) { $Token = $env:HUGGING_FACE_HUB_TOKEN }
 if ($Token) {
-    $SpaceUrl = "https://user:$Token@huggingface.co/spaces/ADI576/SeamLine_Cashier"
+    $SpaceUrl = "https://user:$Token@huggingface.co/spaces/ADI576/proflo_cashier"
 }
 
 if (Test-Path $SpaceDir) { Remove-Item -Recurse -Force $SpaceDir }
@@ -44,9 +44,9 @@ Copy-Item "$Root\deploy\huggingface-cashier\Dockerfile" (Join-Path $SpaceDir "Do
 Push-Location $SpaceDir
 git add -A
 if (-not (git diff --cached --quiet)) {
-    git commit -m "Deploy SeamLine cashier terminal (Docker Space)"
+    git commit -m "Deploy ProFlo cashier terminal (Docker Space)"
 }
 git push
 Pop-Location
 
-Write-Host "Pushed. Open https://huggingface.co/spaces/ADI576/SeamLine_Cashier"
+Write-Host "Pushed. Open https://huggingface.co/spaces/ADI576/proflo_cashier"

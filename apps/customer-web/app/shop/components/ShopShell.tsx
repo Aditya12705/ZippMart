@@ -41,9 +41,9 @@ export function ShopShell({ children }: { children: ReactNode }) {
         <div className="siteHeader__inner">
           {isHome ? (
             <>
-              <Link href="/shop" className="siteHeader__brand" aria-label="SeamLine home">
-                <span className="brandZipp">Seam</span>
-                <span className="brandMart">Line</span>
+              <Link href="/shop" className="siteHeader__brand" aria-label="ProFlo home">
+                <span className="brandZipp">Pro</span>
+                <span className="brandMart">Flo</span>
               </Link>
               <nav className="siteHeader__nav" aria-label="Shop sections">
                 <Link href="/shop/scan" className="siteHeader__pill">
@@ -108,7 +108,7 @@ export function ShopShell({ children }: { children: ReactNode }) {
             </span>
             <span className="siteFooter__muted">Bag syncs while this visit is active</span>
           </div>
-          <p className="siteFooter__legal">© {new Date().getFullYear()} SeamLine · Fashion at the speed of scan</p>
+          <p className="siteFooter__legal">© {new Date().getFullYear()} ProFlo · Fashion at the speed of scan</p>
         </div>
       </footer>
 

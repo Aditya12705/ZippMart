@@ -1241,7 +1241,7 @@ export default function AdminDashboardPage() {
 
                 <label className="field">
                   <span>Brand</span>
-                  <input value={brand} onChange={(e) => setBrand(e.target.value)} placeholder="e.g. SeamLine Basics" />
+                  <input value={brand} onChange={(e) => setBrand(e.target.value)} placeholder="e.g. ProFlo Basics" />
                 </label>
 
                 <label className={`field${formErrors.category ? " field--invalid" : ""}`}>

@@ -1,4 +1,4 @@
--- SeamLine apparel catalog — variant attributes on flat SKU rows
+-- ProFlo apparel catalog — variant attributes on flat SKU rows
 -- Each size/color combination remains one product row with its own barcode.
 
 ALTER TABLE products
@@ -13,4 +13,4 @@ CREATE INDEX IF NOT EXISTS idx_products_style_code ON products (store_id, style_
 CREATE INDEX IF NOT EXISTS idx_products_size ON products (store_id, size) WHERE size <> '';
 CREATE INDEX IF NOT EXISTS idx_products_color ON products (store_id, color) WHERE color <> '';
 
-UPDATE stores SET name = 'SeamLine Flagship' WHERE code = 'BLR001' AND name = 'Main store';
+UPDATE stores SET name = 'ProFlo Flagship' WHERE code = 'BLR001' AND name = 'Main store';

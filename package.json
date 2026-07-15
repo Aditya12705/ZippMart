@@ -2,7 +2,7 @@
   "name": "checkout-system",
   "version": "1.0.0",
   "private": true,
-  "description": "SeamLine apparel checkout platform monorepo",
+  "description": "ProFlo apparel checkout platform monorepo",
   "workspaces": [
     "apps/*",
     "services/*",

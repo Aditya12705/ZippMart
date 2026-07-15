@@ -21,7 +21,7 @@ import {
 import { apiBase, type RecommendationProduct } from "../lib/shopConfig";
 
 export { apiBase, type RecommendationProduct } from "../lib/shopConfig";
-const SESSION_STORAGE_KEY = "seamline-shop-session-id";
+const SESSION_STORAGE_KEY = "proflo-shop-session-id";
 
 export type CartLine = {
   productId?: string;
@@ -171,7 +171,7 @@ export function ShopProvider({ children }: { children: ReactNode }) {
     try {
       const fromStorage =
         typeof window !== "undefined"
-          ? localStorage.getItem("seamline-visit-phone")?.trim() ??
+          ? localStorage.getItem("proflo-visit-phone")?.trim() ??
             localStorage.getItem("zippmart-visit-phone")?.trim() ??
             localStorage.getItem("supermart-visit-phone")?.trim() ??
             ""
@@ -488,7 +488,7 @@ export function ShopProvider({ children }: { children: ReactNode }) {
           setMessage(typeof data.message === "string" ? data.message : "No visit found");
           return false;
         }
-        localStorage.setItem("seamline-visit-phone", t);
+        localStorage.setItem("proflo-visit-phone", t);
         setSessionId(data.sessionId);
         localStorage.setItem(SESSION_STORAGE_KEY, data.sessionId);
         setSessionBootstrapDone(true);

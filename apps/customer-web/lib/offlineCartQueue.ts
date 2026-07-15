@@ -1,4 +1,4 @@
-const QUEUE_KEY = "seamline-offline-cart-queue";
+const QUEUE_KEY = "proflo-offline-cart-queue";
 const MAX = 25;
 
 export type QueuedCartAdd = { barcode: string; qty: number; enqueuedAt: string };

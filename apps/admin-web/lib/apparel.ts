@@ -56,4 +56,4 @@ export const APPAREL_GENDERS = ["Unisex", "Men", "Women", "Kids"] as const;
 
 export const APPAREL_SEASONS = ["", "SS26", "AW26", "Core", "Clearance"] as const;
 
-export const BRAND_NAME = "SeamLine";
+export const BRAND_NAME = "ProFlo";

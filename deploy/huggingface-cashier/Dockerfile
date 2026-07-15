@@ -9,7 +9,7 @@ RUN npm ci
 
 COPY apps/cashier-web ./apps/cashier-web
 
-ENV NEXT_PUBLIC_API_BASE_URL=https://adi576-seamline.hf.space/checkout-api
+ENV NEXT_PUBLIC_API_BASE_URL=https://adi576-proflo.hf.space/checkout-api
 RUN npm run build -w cashier-web \
   && test -f apps/cashier-web/.next/BUILD_ID \
   && test -d apps/cashier-web/.next/standalone

@@ -39,7 +39,7 @@ export default function ShopHomePage() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    setVisitPhone(localStorage.getItem("seamline-visit-phone") ?? localStorage.getItem("zippmart-visit-phone") ?? localStorage.getItem("supermart-visit-phone") ?? "");
+    setVisitPhone(localStorage.getItem("proflo-visit-phone") ?? localStorage.getItem("zippmart-visit-phone") ?? localStorage.getItem("supermart-visit-phone") ?? "");
   }, []);
 
   const loadCatalog = useCallback(async () => {
@@ -112,7 +112,7 @@ export default function ShopHomePage() {
         ? new URLSearchParams(window.location.search).get("store")?.trim()?.toUpperCase()
         : undefined;
     if (visitPhone.trim().length >= 10) {
-      localStorage.setItem("seamline-visit-phone", visitPhone.trim());
+      localStorage.setItem("proflo-visit-phone", visitPhone.trim());
     }
     await createSession(store ?? "BLR001", visitPhone.trim().length >= 10 ? visitPhone.trim() : undefined);
   }
@@ -217,7 +217,7 @@ export default function ShopHomePage() {
               onChange={(e) => setVisitPhone(e.target.value)}
               onBlur={() => {
                 if (visitPhone.trim().length >= 10) {
-                  localStorage.setItem("seamline-visit-phone", visitPhone.trim());
+                  localStorage.setItem("proflo-visit-phone", visitPhone.trim());
                 }
               }}
             />

@@ -1,10 +1,10 @@
-# Push SeamLine to Hugging Face Space ADI576/SeamLine
+# Push Zippmart to Hugging Face Space ADI576/Zippmart
 # Requires HF git credentials (https://huggingface.co/settings/tokens)
 
 $ErrorActionPreference = "Stop"
 $Root = Resolve-Path (Join-Path $PSScriptRoot "..\..")
-$SpaceDir = Join-Path $env:TEMP "seamline-hf-space"
-$SpaceUrl = "https://huggingface.co/spaces/ADI576/SeamLine"
+$SpaceDir = Join-Path $env:TEMP "proflo-hf-space"
+$SpaceUrl = "https://huggingface.co/spaces/ADI576/ProFlo"
 
 $SkipNames = @(
     ".git", "node_modules", ".next", "dist",
@@ -14,7 +14,7 @@ $SkipNames = @(
 $Token = $env:HF_TOKEN
 if (-not $Token) { $Token = $env:HUGGING_FACE_HUB_TOKEN }
 if ($Token) {
-    $SpaceUrl = "https://user:$Token@huggingface.co/spaces/ADI576/SeamLine"
+    $SpaceUrl = "https://user:$Token@huggingface.co/spaces/ADI576/ProFlo"
 }
 
 if (Test-Path $SpaceDir) { Remove-Item -Recurse -Force $SpaceDir }
@@ -40,7 +40,7 @@ Copy-Item "$Root\Dockerfile" (Join-Path $SpaceDir "Dockerfile") -Force
 Push-Location $SpaceDir
 git add -A
 if (-not (git diff --cached --quiet)) {
-    git commit -m "Deploy SeamLine shop, admin, cashier + API (Docker Space)"
+    git commit -m "Deploy ProFlo shop, admin, cashier + API (Docker Space)"
 }
 git push
 if ($LASTEXITCODE -ne 0) {
@@ -49,4 +49,4 @@ if ($LASTEXITCODE -ne 0) {
 }
 Pop-Location
 
-Write-Host "Pushed. Open https://huggingface.co/spaces/ADI576/SeamLine"
+Write-Host "Pushed. Open https://huggingface.co/spaces/ADI576/Zippmart"

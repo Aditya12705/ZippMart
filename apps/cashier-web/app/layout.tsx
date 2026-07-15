@@ -3,8 +3,8 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "SeamLine Counter",
-  description: "SeamLine cashier terminal"
+  title: "ProFlo Counter",
+  description: "ProFlo cashier terminal"
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

@@ -49,7 +49,7 @@ export default function GatePage() {
   return (
     <div className="shell">
       <header className="header">
-        <p className="header__eyebrow">SeamLine</p>
+        <p className="header__eyebrow">ProFlo</p>
         <h1 className="header__title">Exit gate</h1>
         <p className="header__sub">Scan the customer&apos;s exit QR after they have paid. Each code works once.</p>
         <Link href="/" className="gateBack">

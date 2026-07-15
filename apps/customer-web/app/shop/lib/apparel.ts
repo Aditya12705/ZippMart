@@ -1,1 +1,1 @@
-export const BRAND_NAME = "SeamLine";
+export const BRAND_NAME = "ProFlo";

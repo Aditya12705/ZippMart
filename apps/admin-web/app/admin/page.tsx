@@ -49,7 +49,7 @@ export default function AdminLoginPage() {
   return (
     <main className="loginPage">
       <div className="loginCard">
-        <h1 className="loginTitle">SeamLine HQ</h1>
+        <h1 className="loginTitle">ProFlo HQ</h1>
         <p className="loginHint">Sign in to the operations console</p>
 
         <form onSubmit={(e) => void onSubmit(e)} className="loginForm">

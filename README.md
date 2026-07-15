@@ -1,4 +1,4 @@
-# SeamLine Checkout System
+# ProFlo Checkout System
 
 Monorepo for a self-checkout apparel & merchandising platform: customer shop, admin dashboard, cashier terminal, Express API, and optional background worker.
 
@@ -107,7 +107,7 @@ The repo is ready to initialize and push. **Never commit** real `.env` files (th
 git init
 git add .
 git status   # confirm no .env or node_modules
-git commit -m "Initial commit: SeamLine checkout monorepo"
+git commit -m "Initial commit: ProFlo checkout monorepo"
 git branch -M main
 git remote add origin https://github.com/<you>/<repo>.git
 git push -u origin main
@@ -135,7 +135,7 @@ The API is **not** a good fit for Vercel serverless (persistent Express process,
    - **Start:** `cd ../.. && npm run start -w api`
    - **Health check path:** `/health`
 3. Set environment variables from `services/api/.env.example` (use real secrets).
-4. Set `PUBLIC_API_URL` to your Render URL (e.g. `https://seamline-api.onrender.com`).
+4. Set `PUBLIC_API_URL` to your Render URL (e.g. `https://proflo-api.onrender.com`).
 5. Note: free-tier disks are ephemeral — product image uploads may not persist across restarts. For production, move uploads to Supabase Storage or S3.
 
 ### Deploy frontends on Vercel (three projects)

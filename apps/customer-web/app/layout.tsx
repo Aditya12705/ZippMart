@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "SeamLine",
+  title: "ProFlo",
   description: "Fashion & merchandising at the speed of scan."
 };
 

@@ -287,11 +287,11 @@ function receiptEmailHtml(order: Order, receiptNumber: string): string {
     )
     .join("");
   return `<!DOCTYPE html><html><body style="font-family:sans-serif;color:#111">
-<h2>SeamLine receipt</h2>
+<h2>ProFlo receipt</h2>
 <p><strong>${receiptNumber}</strong> · ${order.storeCode}</p>
 <table cellpadding="6" cellspacing="0" border="0">${rows}</table>
 <p>Subtotal: ₹${order.subtotal.toFixed(2)}<br>Tax: ₹${order.taxTotal.toFixed(2)}<br><strong>Total: ₹${order.total.toFixed(2)}</strong></p>
-<p>Thank you for shopping with SeamLine.</p>
+<p>Thank you for shopping with ProFlo.</p>
 </body></html>`;
 }
 
@@ -308,7 +308,7 @@ async function sendReceiptEmail(order: Order, receiptNumber: string): Promise<bo
       body: JSON.stringify({
         from: emailFrom,
         to: [to],
-        subject: `Your SeamLine receipt ${receiptNumber}`,
+        subject: `Your ProFlo receipt ${receiptNumber}`,
         html: receiptEmailHtml(order, receiptNumber)
       })
     });
