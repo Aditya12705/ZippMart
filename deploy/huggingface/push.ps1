@@ -8,7 +8,7 @@ $SpaceUrl = "https://huggingface.co/spaces/ADI576/ProFlo"
 
 $SkipNames = @(
     ".git", "node_modules", ".next", "dist",
-    "worker"
+    "worker", "docs", "nlp-lab", "infra", "proposals", "supabase"
 )
 
 $Token = $env:HF_TOKEN
