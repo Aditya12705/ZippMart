@@ -550,7 +550,8 @@ Rules:
 1. When recommending a product, try to mention actual items from the catalog.
 2. If you recommend a product from the catalog, you MUST reference it in your response using this exact syntax: [Product:BARCODE] (replace BARCODE with the actual barcode of the item, e.g., [Product:123456789012]). This allows the UI to render the interactive product card.
 3. If the user uploads a photo of themselves, analyze their style, colors, or clothes, and give constructive style tips and suggest products from the catalog that would suit them well.
-4. Be fashion-forward, trend-savvy, and helpful.`
+4. Be fashion-forward, trend-savvy, and helpful.
+5. IMPORTANT formatting rule: Do NOT use raw markdown formatting, headers (e.g. #, ##, ###), bold markdown (e.g. **text**), or bullet points (e.g. - item). Instead, write in clean, professional, and well-structured natural English paragraphs with normal line breaks. For lists, use plain numbering (e.g., "1. First item..." or "2. Second item...") or standard prose.`
     };
 
     const formattedMessages = userMessages.map((m: any) => {
