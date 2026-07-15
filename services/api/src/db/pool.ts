@@ -29,16 +29,10 @@ export async function verifyDb(): Promise<void> {
   await p.query("ALTER TABLE products ADD COLUMN IF NOT EXISTS reorder_level INT NOT NULL DEFAULT 10");
 
   try {
-    // 1. Delete pharmacy/grocery old seed data
+    // 1. Delete all products that are not fashion-related (e.g. Snacks, Personal Care, General etc.)
     await p.query(`
       DELETE FROM products 
-      WHERE category IN ('Personal Care', 'Beverages', 'Oral Care', 'Grocery', 'Pharmacy')
-         OR name ILIKE '%lotion%' 
-         OR name ILIKE '%buds%' 
-         OR name ILIKE '%maxfresh%'
-         OR name ILIKE '%Colgate%'
-         OR name ILIKE '%Moiz%'
-         OR name ILIKE '%Johnson%'
+      WHERE category NOT IN ('Apparel', 'Outerwear', 'Accessories')
     `);
 
     // 2. Fetch store id
