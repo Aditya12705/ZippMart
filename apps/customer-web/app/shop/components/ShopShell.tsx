@@ -17,6 +17,54 @@ function backHref(pathname: string): string {
   return "/shop";
 }
 
+function parseInlineMarkdown(text: string) {
+  const parts = text.split(/(\*\*.*?\*\*)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith("**") && part.endsWith("**")) {
+      return <strong key={i}>{part.slice(2, -2)}</strong>;
+    }
+    return part;
+  });
+}
+
+function renderMessageContent(text: string) {
+  const cleanedText = text.replace(/\[Product:\d+\]/g, "").trim();
+  const lines = cleanedText.split("\n");
+  
+  return (
+    <div className="chatMarkdown">
+      {lines.map((line, idx) => {
+        const trimmed = line.trim();
+        if (!trimmed) {
+          return <div key={idx} className="chatMarkdown__space" style={{ height: "8px" }} />;
+        }
+        
+        if (trimmed.startsWith("### ")) {
+          return <h4 key={idx} className="chatMarkdown__h4" style={{ margin: "8px 0 4px", fontSize: "14px", fontWeight: "800", color: "inherit" }}>{parseInlineMarkdown(trimmed.slice(4))}</h4>;
+        }
+        if (trimmed.startsWith("#### ")) {
+          return <h5 key={idx} className="chatMarkdown__h5" style={{ margin: "6px 0 2px", fontSize: "13px", fontWeight: "800", color: "inherit" }}>{parseInlineMarkdown(trimmed.slice(5))}</h5>;
+        }
+        if (trimmed.startsWith("## ")) {
+          return <h3 key={idx} className="chatMarkdown__h3" style={{ margin: "12px 0 6px", fontSize: "16px", fontWeight: "800", color: "inherit" }}>{parseInlineMarkdown(trimmed.slice(3))}</h3>;
+        }
+        if (trimmed.startsWith("# ")) {
+          return <h2 key={idx} className="chatMarkdown__h2" style={{ margin: "16px 0 8px", fontSize: "18px", fontWeight: "900", color: "inherit" }}>{parseInlineMarkdown(trimmed.slice(2))}</h2>;
+        }
+        if (trimmed.startsWith("- ") || trimmed.startsWith("* ") || trimmed.startsWith("• ")) {
+          return (
+            <ul key={idx} className="chatMarkdown__ul" style={{ margin: "4px 0", paddingLeft: "18px", listStyleType: "disc" }}>
+              <li className="chatMarkdown__li">{parseInlineMarkdown(trimmed.slice(2))}</li>
+            </ul>
+          );
+        }
+        
+        return <p key={idx} className="chatMarkdown__p" style={{ margin: "6px 0", lineHeight: "1.5" }}>{parseInlineMarkdown(line)}</p>;
+      })}
+    </div>
+  );
+}
+
 export function ShopShell({ children }: { children: ReactNode }) {
   const pathname = usePathname() ?? "/shop";
   const { cartItemCount } = useShop();
@@ -296,9 +344,7 @@ export function ShopShell({ children }: { children: ReactNode }) {
                           <img src={msg.image} alt="User upload" />
                         </div>
                       ) : null}
-                      <p className="chatBubble__text">
-                        {msg.sender === "assistant" ? msg.text.replace(/\[Product:\d+\]/g, "").trim() : msg.text}
-                      </p>
+                      {renderMessageContent(msg.text)}
                       
                       {messageProducts.length > 0 ? (
                         <div className="chatBubble__products">
