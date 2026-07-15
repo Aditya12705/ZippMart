@@ -1,16 +1,16 @@
-# Push admin app to Hugging Face Space ADI576/proflo_admin
+# Push admin app to Hugging Face Space ADI576/proflo-admin
 
 $ErrorActionPreference = "Stop"
 $Root = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 $SpaceDir = Join-Path $env:TEMP "proflo-hf-admin"
-$SpaceUrl = "https://huggingface.co/spaces/ADI576/proflo_admin"
+$SpaceUrl = "https://huggingface.co/spaces/ADI576/proflo-admin"
 
 $SkipNames = @(".git", "node_modules", ".next", "dist")
 
 $Token = $env:HF_TOKEN
 if (-not $Token) { $Token = $env:HUGGING_FACE_HUB_TOKEN }
 if ($Token) {
-    $SpaceUrl = "https://user:$Token@huggingface.co/spaces/ADI576/proflo_admin"
+    $SpaceUrl = "https://user:$Token@huggingface.co/spaces/ADI576/proflo-admin"
 }
 
 if (Test-Path $SpaceDir) { Remove-Item -Recurse -Force $SpaceDir }
@@ -49,4 +49,4 @@ if (-not (git diff --cached --quiet)) {
 git push
 Pop-Location
 
-Write-Host "Pushed. Open https://huggingface.co/spaces/ADI576/proflo_admin"
+Write-Host "Pushed. Open https://huggingface.co/spaces/ADI576/proflo-admin"
