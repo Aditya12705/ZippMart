@@ -134,7 +134,7 @@ export default function ShopHomePage() {
             <div className="heroBlock__head">
               <div>
                 <p className="heroBlock__eyebrow">{BRAND_NAME} · scan &amp; go</p>
-                <h2 className="heroBlock__title">Seam in, style out</h2>
+                <h2 className="heroBlock__title">Scan in, style out</h2>
                 {loyaltyTier ? (
                   <div className={`loyaltyBadge loyaltyBadge--${loyaltyTier.toLowerCase()}`}>
                     {loyaltyTier} Member ({discountPercent}% Off)

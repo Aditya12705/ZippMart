@@ -934,8 +934,8 @@ export default function AdminDashboardPage() {
       <div className="adminContainer">
         <div className="adminMobileHeader">
           <div className="adminSidebar__brand">
-            <span className="brandZipp">Seam</span>
-            <span className="brandMart">Line</span>
+            <span className="brandZipp">Pro</span>
+            <span className="brandMart">Flo</span>
           </div>
           <button
             type="button"
@@ -948,8 +948,8 @@ export default function AdminDashboardPage() {
         </div>
         <aside className={`adminSidebar ${mobileSidebarOpen ? "adminSidebar--open" : ""}`}>
           <div className="adminSidebar__brand">
-            <span className="brandZipp">Seam</span>
-            <span className="brandMart">Line</span>
+            <span className="brandZipp">Pro</span>
+            <span className="brandMart">Flo</span>
           </div>
 
           <div className="adminSidebar__meta">
