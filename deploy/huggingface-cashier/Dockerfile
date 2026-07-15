@@ -25,8 +25,6 @@ RUN apk add --no-cache wget
 
 COPY --from=build /app/apps/cashier-web/.next/standalone ./
 COPY --from=build /app/apps/cashier-web/.next/static ./apps/cashier-web/.next/static
-COPY deploy/huggingface-cashier/start.sh /start.sh
-RUN chmod +x /start.sh
 
 EXPOSE 7860
-CMD ["/start.sh"]
+CMD ["node", "apps/cashier-web/server.js"]
