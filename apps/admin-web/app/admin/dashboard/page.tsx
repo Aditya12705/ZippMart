@@ -252,6 +252,7 @@ export default function AdminDashboardPage() {
   const imageInputRef = useRef<HTMLInputElement>(null);
   const inventoryImageInputRef = useRef<HTMLInputElement>(null);
   const [imageTargetId, setImageTargetId] = useState<string | null>(null);
+  const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [formErrors, setFormErrors] = useState<FormErrors>({});
   const [barcodeConflict, setBarcodeConflict] = useState<AdminProduct | null>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
@@ -462,7 +463,7 @@ export default function AdminDashboardPage() {
 
     if (!trimmedBarcode) errors.barcode = "Barcode is required.";
     else if (trimmedBarcode.length < 4) errors.barcode = "Barcode must be at least 4 characters.";
-    else if (products.some((p) => p.barcode === trimmedBarcode)) errors.barcode = "This barcode is already in the catalogue.";
+    else if (products.some((p) => p.barcode === trimmedBarcode && p.id !== editingProductId)) errors.barcode = "This barcode is already in the catalogue.";
 
     if (!trimmedName) errors.name = "Product name is required.";
     if (!trimmedCategory) errors.category = "Category is required.";
@@ -483,6 +484,7 @@ export default function AdminDashboardPage() {
   }
 
   function resetProductForm() {
+    setEditingProductId(null);
     setBarcode("");
     setName("");
     setCategory("General");
@@ -505,6 +507,43 @@ export default function AdminDashboardPage() {
     setFormErrors({});
     setBarcodeConflict(null);
     setCameraOn(false);
+  }
+
+  function startEditingProduct(p: AdminProduct) {
+    setEditingProductId(p.id);
+    setBarcode(p.barcode);
+    setName(p.name);
+    setCategory(p.category);
+    setStyleCode(p.styleCode);
+    setSize(p.size);
+    setColor(p.color);
+    setBrand(p.brand);
+    setSeason(p.season);
+    setGender(p.gender);
+    setCostPrice(String(p.costPrice));
+    setSellingPrice(String(p.unitPrice));
+    setReorderLevel(String(p.reorderLevel));
+    setTaxPercent(String(p.taxPercent));
+    setInStock(String(p.inStock));
+    setDemandScore(String(p.demandScore));
+    setImageUrl(p.imageUrl || "");
+    setFormErrors({});
+    setBarcodeConflict(null);
+    setCameraOn(false);
+
+    const sell = p.unitPrice;
+    const cost = p.costPrice;
+    if (sell > 0 && cost > 0) {
+      setMarginPct((((sell - cost) / sell) * 100).toFixed(1));
+      setMarkupPct((((sell - cost) / cost) * 100).toFixed(1));
+    } else {
+      setMarginPct("");
+      setMarkupPct("");
+    }
+
+    const addPanel = document.querySelector(".adminPanel--add");
+    addPanel?.scrollIntoView({ behavior: "smooth" });
+    window.setTimeout(() => nameInputRef.current?.focus(), 150);
   }
 
   function handleBarcodeInput(value: string) {
@@ -781,8 +820,12 @@ export default function AdminDashboardPage() {
 
     setLoading(true);
     setMessage("");
-    const resp = await fetch(`${apiBase}/v1/admin/products`, {
-      method: "POST",
+    const url = editingProductId 
+      ? `${apiBase}/v1/admin/products/${editingProductId}`
+      : `${apiBase}/v1/admin/products`;
+    const method = editingProductId ? "PATCH" : "POST";
+    const resp = await fetch(url, {
+      method,
       headers: adminFetchHeaders(true),
       body: JSON.stringify({
         barcode: barcode.trim(),
@@ -810,14 +853,14 @@ export default function AdminDashboardPage() {
       return;
     }
     if (resp.ok) {
-      setMessage("Product added to catalogue.");
+      setMessage(editingProductId ? "Product details updated." : "Product added to catalogue.");
       resetProductForm();
       await loadProducts();
       await loadMetrics();
       await loadMovements();
     } else {
       const data = await resp.json().catch(() => ({}));
-      const errMsg = (data as { message?: string }).message ?? "Unable to add product";
+      const errMsg = (data as { message?: string }).message ?? (editingProductId ? "Unable to update product" : "Unable to add product");
       setMessage(errMsg);
       if (resp.status === 409 || errMsg.toLowerCase().includes("barcode")) {
         setFormErrors((prev) => ({ ...prev, barcode: errMsg }));
@@ -1171,7 +1214,7 @@ export default function AdminDashboardPage() {
         <div className="adminWorkspace">
           <div className="adminWorkspace__left">
             <section className="panel adminPanel adminPanel--add">
-              <h2 className="adminPanel__title">Add product</h2>
+              <h2 className="adminPanel__title">{editingProductId ? "Edit product details" : "Add product"}</h2>
               <p className="adminPanel__lede">
                 Landed cost vs list shelf price. Scan barcodes with the camera or a USB scanner.
               </p>
@@ -1398,10 +1441,10 @@ export default function AdminDashboardPage() {
                   disabled={loading || !!barcodeConflict}
                   onClick={() => void addProduct()}
                 >
-                  {loading ? "Saving…" : "Save product"}
+                  {loading ? "Saving…" : editingProductId ? "Update product" : "Save product"}
                 </button>
                 <button type="button" className="adminBtn adminBtn--ghost" disabled={loading} onClick={resetProductForm}>
-                  Clear form
+                  {editingProductId ? "Cancel edit" : "Clear form"}
                 </button>
                 <p className="formNote">Each size/color is a separate SKU with its own hang-tag barcode. SKU auto-generates as STYLE-COLOR-SIZE.</p>
               </div>
@@ -1526,6 +1569,13 @@ export default function AdminDashboardPage() {
                               <button
                                 type="button"
                                 className="adminBtn adminBtn--small adminBtn--ghost"
+                                onClick={() => startEditingProduct(p)}
+                              >
+                                Edit Info
+                              </button>
+                              <button
+                                type="button"
+                                className="adminBtn adminBtn--small adminBtn--ghost"
                                 onClick={() => {
                                   setImageTargetId(p.id);
                                   inventoryImageInputRef.current?.click();
@@ -1603,6 +1653,13 @@ export default function AdminDashboardPage() {
                     <div className="adminInvCard__actions">
                       <button type="button" className="adminBtn adminBtn--small" onClick={() => openStockModal(p)}>
                         Set stock
+                      </button>
+                      <button
+                        type="button"
+                        className="adminBtn adminBtn--small adminBtn--ghost"
+                        onClick={() => startEditingProduct(p)}
+                      >
+                        Edit Info
                       </button>
                       <button
                         type="button"

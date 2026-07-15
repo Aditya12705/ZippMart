@@ -232,6 +232,73 @@ export async function createProduct(
   });
 }
 
+export async function updateProductDetails(
+  id: string,
+  input: {
+    barcode: string;
+    name: string;
+    category: string;
+    styleCode: string;
+    size: string;
+    color: string;
+    brand: string;
+    season: string;
+    gender: string;
+    unitPrice: number;
+    costPrice: number;
+    reorderLevel: number;
+    taxPercent: number;
+    demandScore: number;
+    imageUrl?: string | null;
+  }
+): Promise<Product | null> {
+  const imageUrl = input.imageUrl?.trim() || null;
+  const sku = buildVariantSku(input.styleCode, input.color, input.size, input.barcode);
+  const { rows } = await getPool().query<ProductRow>(
+    `UPDATE products
+     SET barcode = $2,
+         sku = $3,
+         name = $4,
+         category = $5,
+         style_code = $6,
+         size = $7,
+         color = $8,
+         brand = $9,
+         season = $10,
+         gender = $11,
+         unit_price = $12,
+         cost_price = $13,
+         reorder_level = $14,
+         tax_percent = $15,
+         demand_score = $16,
+         image_url = $17
+     WHERE id = $1 AND is_active = TRUE
+     RETURNING ${PRODUCT_SELECT}`,
+    [
+      id,
+      input.barcode,
+      sku,
+      input.name,
+      input.category,
+      input.styleCode?.trim() ?? "",
+      input.size?.trim() ?? "",
+      input.color?.trim() ?? "",
+      input.brand?.trim() ?? "",
+      input.season?.trim() ?? "",
+      input.gender?.trim() || "Unisex",
+      input.unitPrice,
+      input.costPrice,
+      input.reorderLevel ?? 10,
+      input.taxPercent,
+      input.demandScore,
+      imageUrl
+    ]
+  );
+  if (!rows[0]) return null;
+  const reserved = await getReservationSummary();
+  return mapProduct(rows[0], reserved.get(id) ?? 0);
+}
+
 export async function updateProductImage(id: string, imageUrl: string | null): Promise<Product | null> {
   const { rows } = await getPool().query<ProductRow>(
     `UPDATE products SET image_url = $2

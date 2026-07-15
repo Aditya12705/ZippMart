@@ -2582,3 +2582,385 @@ body {
   color: var(--muted);
   margin: 0;
 }
+
+/* ==========================================================================
+   AI Stylist Chatbot Styles
+   ========================================================================== */
+.fashionBotContainer {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12px;
+  font-family: 'Outfit', sans-serif;
+}
+
+.fashionBotToggleBtn {
+  background: linear-gradient(135deg, var(--olive) 0%, #b2946c 100%);
+  color: #0b0f19;
+  border: none;
+  padding: 14px 22px;
+  border-radius: 99px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4), 0 4px 10px rgba(197, 168, 128, 0.3);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fashionBotToggleBtn:hover {
+  transform: translateY(-3px) scale(1.02);
+  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.5), 0 6px 15px rgba(197, 168, 128, 0.4);
+}
+
+.fashionBotPanel {
+  width: 380px;
+  height: 520px;
+  background: rgba(19, 27, 46, 0.85);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(197, 168, 128, 0.2);
+  border-radius: 20px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: slideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.fashionBotHeader {
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(197, 168, 128, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(11, 15, 25, 0.4);
+}
+
+.fashionBotHeader__info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.fashionBotHeader__avatar {
+  font-size: 24px;
+}
+
+.fashionBotHeader__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  font-family: 'Syne', sans-serif;
+  letter-spacing: 0.02em;
+}
+
+.fashionBotHeader__status {
+  font-size: 11px;
+  color: #10b981;
+  font-weight: 600;
+  display: block;
+}
+
+.fashionBotHeader__close {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 16px;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.fashionBotHeader__close:hover {
+  color: var(--text);
+}
+
+.fashionBotMessages {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background: rgba(11, 15, 25, 0.15);
+}
+
+.chatBubble {
+  display: flex;
+  max-width: 85%;
+  flex-direction: column;
+}
+
+.chatBubble--user {
+  align-self: flex-end;
+}
+
+.chatBubble--assistant {
+  align-self: flex-start;
+}
+
+.chatBubble__content {
+  padding: 12px 16px;
+  border-radius: 16px;
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+.chatBubble--user .chatBubble__content {
+  background: var(--olive);
+  color: #0b0f19;
+  font-weight: 600;
+  border-bottom-right-radius: 2px;
+}
+
+.chatBubble--assistant .chatBubble__content {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--text);
+  border-bottom-left-radius: 2px;
+}
+
+.chatBubble__text {
+  margin: 0;
+  white-space: pre-line;
+}
+
+.chatBubble__uploadedImage {
+  margin-bottom: 8px;
+  border-radius: 10px;
+  overflow: hidden;
+  max-width: 100%;
+  border: 1px solid var(--line);
+}
+
+.chatBubble__uploadedImage img {
+  display: block;
+  width: 100%;
+  max-height: 160px;
+  object-fit: cover;
+}
+
+/* Chat Product Card */
+.chatBubble__products {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.chatProductCard {
+  background: rgba(11, 15, 25, 0.5);
+  border: 1px solid rgba(197, 168, 128, 0.25);
+  border-radius: 12px;
+  padding: 10px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.chatProductCard__thumb {
+  width: 54px;
+  height: 54px;
+  border-radius: 6px;
+  object-fit: cover;
+  flex-shrink: 0;
+  border: 1px solid var(--line);
+}
+
+.chatProductCard__thumb--empty {
+  background: var(--surface-2);
+}
+
+.chatProductCard__details {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.chatProductCard__name {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chatProductCard__price {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--olive);
+}
+
+.chatProductCard__btn {
+  background: var(--olive);
+  color: #0b0f19;
+  border: none;
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 6px;
+  cursor: pointer;
+  width: fit-content;
+  margin-top: 4px;
+  transition: all 0.2s ease;
+}
+
+.chatProductCard__btn:hover {
+  background: #fff;
+  transform: translateY(-1px);
+}
+
+/* Typing Indicator */
+.typingIndicator {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 0;
+}
+
+.typingIndicator span {
+  width: 6px;
+  height: 6px;
+  background: var(--muted);
+  border-radius: 50%;
+  animation: bounce 1.4s infinite ease-in-out both;
+}
+
+.typingIndicator span:nth-child(1) { animation-delay: -0.32s; }
+.typingIndicator span:nth-child(2) { animation-delay: -0.16s; }
+
+@keyframes bounce {
+  0%, 80%, 100% { transform: scale(0); }
+  40% { transform: scale(1.0); }
+}
+
+/* Input Area */
+.fashionBotInputArea {
+  padding: 14px 16px;
+  border-top: 1px solid rgba(197, 168, 128, 0.15);
+  background: rgba(11, 15, 25, 0.3);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.fashionBotInputArea__preview {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+  width: fit-content;
+}
+
+.fashionBotInputArea__preview img {
+  width: 50px;
+  height: 50px;
+  border-radius: 6px;
+  object-fit: cover;
+  border: 1px solid var(--olive);
+}
+
+.fashionBotInputArea__previewRemove {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  background: var(--orange);
+  color: #fff;
+  border: none;
+  border-radius: 50%;
+  width: 16px;
+  height: 16px;
+  font-size: 9px;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.fashionBotInputRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.fashionBotInputRow__attach {
+  background: none;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  opacity: 0.8;
+  transition: opacity 0.15s ease;
+  padding: 0 4px;
+}
+
+.fashionBotInputRow__attach:hover {
+  opacity: 1;
+}
+
+.fashionBotInputRow__input {
+  flex: 1;
+  height: 38px;
+  background: rgba(11, 15, 25, 0.5);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0 12px;
+  font: inherit;
+  font-size: 13.5px;
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+.fashionBotInputRow__input:focus {
+  border-color: var(--olive);
+}
+
+.fashionBotInputRow__send {
+  background: var(--olive);
+  color: #0b0f19;
+  border: none;
+  height: 38px;
+  padding: 0 16px;
+  border-radius: 10px;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.fashionBotInputRow__send:hover {
+  background: #fff;
+}
+
+/* Mobile responsive chat panel */
+@media (max-width: 480px) {
+  .fashionBotPanel {
+    width: calc(100vw - 32px);
+    height: 480px;
+  }
+  .fashionBotContainer {
+    bottom: 16px;
+    right: 16px;
+  }
+}

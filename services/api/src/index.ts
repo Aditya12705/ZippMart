@@ -61,6 +61,7 @@ import {
   updateOrderRefunded,
   updateOrderVoided,
   updateProductImage,
+  updateProductDetails,
   type Order,
   type OrderLineSnapshot,
   type Product,
@@ -522,6 +523,92 @@ app.get("/v1/customer/products", async (req, res) => {
   res.json(await Promise.all(products.map(toCustomerProduct)));
 });
 
+app.post("/v1/customer/fashion-bot", async (req, res) => {
+  const userMessages = req.body.messages;
+  if (!Array.isArray(userMessages)) {
+    return res.status(400).json({ message: "messages array is required" });
+  }
+
+  try {
+    const products = await listProducts();
+    const inventoryContext = products
+      .map(
+        (p) =>
+          `- Name: ${p.name}, Brand: ${p.brand || "ProFlo"}, Style Code: ${p.styleCode || "N/A"}, Category: ${p.category}, Color: ${p.color || "N/A"}, Size: ${p.size || "N/A"}, Price: $${p.unitPrice}, Available Stock: ${p.availableQty}, Barcode: ${p.barcode}`
+      )
+      .join("\n");
+
+    const systemPrompt = {
+      role: "system",
+      content: `You are the ProFlo AI Fashion Assistant. You are a personal stylist, fashion coordinator, and shopping helper at the ProFlo Flagship store.
+Your goal is to help users with style advice, coordinate outfits, and answer fashion questions.
+
+Here is the current ProFlo store product catalog in stock:
+${inventoryContext}
+
+Rules:
+1. When recommending a product, try to mention actual items from the catalog.
+2. If you recommend a product from the catalog, you MUST reference it in your response using this exact syntax: [Product:BARCODE] (replace BARCODE with the actual barcode of the item, e.g., [Product:123456789012]). This allows the UI to render the interactive product card.
+3. If the user uploads a photo of themselves, analyze their style, colors, or clothes, and give constructive style tips and suggest products from the catalog that would suit them well.
+4. Be fashion-forward, trend-savvy, and helpful.`
+    };
+
+    const formattedMessages = userMessages.map((m: any) => {
+      const role = String(m.role || "user");
+      const textContent = String(m.content || m.text || "");
+      if (m.image) {
+        return {
+          role,
+          content: [
+            { type: "text", text: textContent },
+            { type: "image_url", image_url: { url: m.image } }
+          ]
+        };
+      }
+      return {
+        role,
+        content: textContent
+      };
+    });
+
+    const messagesToSend = [systemPrompt, ...formattedMessages];
+
+    const mistralApiKey = "ddmV3IBHRhh7NKrugPP1LEtlpfRAU8dv";
+    const response = await fetch("https://api.mistral.ai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${mistralApiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: "pixtral-12b-2409",
+        messages: messagesToSend,
+        max_tokens: 800
+      })
+    });
+
+    if (!response.ok) {
+      const errBody = await response.text();
+      console.error("Mistral API Error:", errBody);
+      return res.status(502).json({ message: "Error communicating with Mistral AI fashion service" });
+    }
+
+    const data = await response.json();
+    const assistantMessage = data.choices?.[0]?.message;
+    if (!assistantMessage) {
+      return res.status(502).json({ message: "Empty response from Mistral AI fashion service" });
+    }
+
+    return res.json({
+      role: "assistant",
+      content: assistantMessage.content
+    });
+  } catch (error) {
+    console.error("Fashion bot error:", error);
+    return res.status(500).json({ message: "An error occurred in the fashion assistant backend" });
+  }
+});
+
 app.post("/v1/customer/cart/items", async (req, res) => {
   const parsed = addCartItemSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json(parsed.error.flatten());
@@ -882,6 +969,60 @@ app.post("/v1/admin/products", requireAuth("staff"), async (req, res) => {
     effectiveUnitPrice: eff,
     profitPerUnitAtList: profitPerUnit(created, created.unitPrice),
     profitPerUnitAtSale: profitPerUnit(created, eff)
+  });
+});
+
+app.patch("/v1/admin/products/:id", requireAuth("staff"), async (req, res) => {
+  const id = pathParam(req.params.id);
+  const body = req.body as Partial<Product> & { sellingPrice?: number };
+  const existingProduct = await findProductById(id);
+  if (!existingProduct) return res.status(404).json({ message: "Product not found" });
+
+  const sell = Number(body.unitPrice ?? body.sellingPrice ?? existingProduct.unitPrice);
+  const cost = Number(body.costPrice ?? existingProduct.costPrice);
+
+  if (!body.barcode || !body.name || !body.category || !Number.isFinite(sell) || sell <= 0) {
+    return res.status(400).json({ message: "barcode, name, category, and unitPrice (selling) are required" });
+  }
+
+  const barcodeConflict = await findProductByBarcode(String(body.barcode).trim());
+  if (barcodeConflict && barcodeConflict.id !== id) {
+    return res.status(409).json({ message: "Another product with this barcode already exists" });
+  }
+
+  if (!Number.isFinite(cost) || cost < 0) return res.status(400).json({ message: "costPrice must be a non-negative number" });
+  if (cost > sell) return res.status(400).json({ message: "costPrice should not exceed selling price" });
+
+  const actor = (req as Request & { staff?: { sub: string } }).staff?.sub ?? "staff";
+  const updated = await updateProductDetails(id, {
+    barcode: String(body.barcode).trim(),
+    name: String(body.name),
+    category: String(body.category),
+    styleCode: String(body.styleCode ?? ""),
+    size: String(body.size ?? ""),
+    color: String(body.color ?? ""),
+    brand: String(body.brand ?? ""),
+    season: String(body.season ?? ""),
+    gender: String(body.gender ?? "Unisex"),
+    unitPrice: Math.round(sell * 100) / 100,
+    costPrice: Math.round(cost * 100) / 100,
+    taxPercent: Number(body.taxPercent ?? existingProduct.taxPercent),
+    reorderLevel: Math.max(0, Math.floor(Number(body.reorderLevel ?? existingProduct.reorderLevel))),
+    demandScore: Math.max(0, Number(body.demandScore ?? existingProduct.demandScore)),
+    imageUrl: typeof body.imageUrl === "string" ? body.imageUrl.trim() : existingProduct.imageUrl
+  });
+
+  if (!updated) return res.status(500).json({ message: "Unable to update product details" });
+
+  await pushAudit(actor, "staff", "product.update", `${updated.barcode} ${updated.name}`);
+  const d = await getDiscountPercent(updated.id);
+  const eff = shelfUnitPrice(updated, d);
+  return res.json({
+    ...updated,
+    discountPercent: d,
+    effectiveUnitPrice: eff,
+    profitPerUnitAtList: profitPerUnit(updated, updated.unitPrice),
+    profitPerUnitAtSale: profitPerUnit(updated, eff)
   });
 });
 

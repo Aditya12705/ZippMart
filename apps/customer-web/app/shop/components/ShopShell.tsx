@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { useShop } from "../context/ShopContext";
+import { useShop, apiBase, type RecommendationProduct } from "../context/ShopContext";
 
 const TITLES: Record<string, string> = {
   "/shop/scan": "Scan",
@@ -34,6 +34,123 @@ export function ShopShell({ children }: { children: ReactNode }) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [helpOpen]);
+
+  // Chatbot State
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatMessages, setChatMessages] = useState<Array<{ sender: "user" | "assistant"; text: string; image?: string }>>([
+    { sender: "assistant", text: "Hi! I'm your ProFlo AI Fashion Assistant. Ask me for styling advice, trend updates, or outfit matches. You can also upload a photo of yourself to ask what will suit you!" }
+  ]);
+  const [chatInput, setChatInput] = useState("");
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [chatLoading, setChatLoading] = useState(false);
+  const [productCache, setProductCache] = useState<Record<string, RecommendationProduct>>({});
+  
+  const { addToCart } = useShop();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to bottom of chat
+  useEffect(() => {
+    if (chatOpen) {
+      chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [chatOpen, chatMessages, chatLoading]);
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      alert("Please upload an image file.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setSelectedImage(String(reader.result));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSendChatMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const text = chatInput.trim();
+    if (!text && !selectedImage) return;
+
+    const userMsg = { sender: "user" as const, text, image: selectedImage || undefined };
+    setChatMessages((prev) => [...prev, userMsg]);
+    setChatInput("");
+    setSelectedImage(null);
+    setChatLoading(true);
+
+    try {
+      const history = chatMessages.map((m) => ({
+        role: m.sender === "user" ? "user" : "assistant",
+        content: m.text,
+        image: m.image
+      }));
+      history.push({
+        role: "user",
+        content: text,
+        image: userMsg.image
+      });
+
+      const resp = await fetch(`${apiBase}/v1/customer/fashion-bot`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: history })
+      });
+
+      if (!resp.ok) throw new Error("API error");
+      const data = await resp.json();
+      
+      const assistantMsg = { sender: "assistant" as const, text: data.content };
+      setChatMessages((prev) => [...prev, assistantMsg]);
+
+      // Parse barcodes and fetch product info
+      const barcodes = [];
+      const regex = /\[Product:(\d+)\]/g;
+      let match;
+      while ((match = regex.exec(data.content)) !== null) {
+        barcodes.push(match[1]);
+      }
+
+      if (barcodes.length > 0) {
+        for (const barcode of barcodes) {
+          if (!productCache[barcode]) {
+            try {
+              const pResp = await fetch(`${apiBase}/v1/customer/products?q=${barcode}`);
+              if (pResp.ok) {
+                const pList = await pResp.json();
+                if (pList && pList.length > 0) {
+                  setProductCache((prev) => ({ ...prev, [barcode]: pList[0] }));
+                }
+              }
+            } catch (e) {
+              console.error("Error fetching product for bot:", e);
+            }
+          }
+        }
+      }
+    } catch {
+      setChatMessages((prev) => [
+        ...prev,
+        { sender: "assistant", text: "Sorry, I am having trouble connecting to the styling service right now. Please try again later!" }
+      ]);
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
+  const getMessageProducts = (text: string): RecommendationProduct[] => {
+    const barcodes: string[] = [];
+    const regex = /\[Product:(\d+)\]/g;
+    let match;
+    while ((match = regex.exec(text)) !== null) {
+      barcodes.push(match[1]);
+    }
+    return barcodes
+      .map((b) => productCache[b])
+      .filter(Boolean);
+  };
 
   return (
     <div className="shopApp">
@@ -146,6 +263,141 @@ export function ShopShell({ children }: { children: ReactNode }) {
           </div>
         </div>
       ) : null}
+      {/* Floating Fashion Bot */}
+      <div className="fashionBotContainer">
+        {chatOpen ? (
+          <div className="fashionBotPanel" role="dialog" aria-label="AI Fashion Assistant">
+            <header className="fashionBotHeader">
+              <div className="fashionBotHeader__info">
+                <span className="fashionBotHeader__avatar">🤖</span>
+                <div>
+                  <h3 className="fashionBotHeader__title">ProFlo Stylist</h3>
+                  <span className="fashionBotHeader__status">Online · AI Assistant</span>
+                </div>
+              </div>
+              <button 
+                type="button" 
+                className="fashionBotHeader__close" 
+                onClick={() => setChatOpen(false)}
+                aria-label="Close Chat"
+              >
+                ✕
+              </button>
+            </header>
+
+            <div className="fashionBotMessages">
+              {chatMessages.map((msg, idx) => {
+                const messageProducts = msg.sender === "assistant" ? getMessageProducts(msg.text) : [];
+                return (
+                  <div key={idx} className={`chatBubble chatBubble--${msg.sender}`}>
+                    <div className="chatBubble__content">
+                      {msg.image ? (
+                        <div className="chatBubble__uploadedImage">
+                          <img src={msg.image} alt="User upload" />
+                        </div>
+                      ) : null}
+                      <p className="chatBubble__text">
+                        {msg.sender === "assistant" ? msg.text.replace(/\[Product:\d+\]/g, "").trim() : msg.text}
+                      </p>
+                      
+                      {messageProducts.length > 0 ? (
+                        <div className="chatBubble__products">
+                          {messageProducts.map((p) => (
+                            <div key={p.id} className="chatProductCard">
+                              {p.imageUrl ? (
+                                <img src={p.imageUrl} alt="" className="chatProductCard__thumb" />
+                              ) : (
+                                <span className="chatProductCard__thumb chatProductCard__thumb--empty" />
+                              )}
+                              <div className="chatProductCard__details">
+                                <h4 className="chatProductCard__name">{p.name}</h4>
+                                <span className="chatProductCard__price">${p.unitPrice.toFixed(2)}</span>
+                                <button
+                                  type="button"
+                                  className="chatProductCard__btn"
+                                  onClick={async () => {
+                                    if (p.barcode) {
+                                      const success = await addToCart(p.barcode, 1);
+                                      if (success) {
+                                        alert(`${p.name} added to bag!`);
+                                      }
+                                    }
+                                  }}
+                                >
+                                  Add to Bag
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                );
+              })}
+              {chatLoading ? (
+                <div className="chatBubble chatBubble--assistant">
+                  <div className="chatBubble__content">
+                    <div className="typingIndicator">
+                      <span></span>
+                      <span></span>
+                      <span></span>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+              <div ref={chatEndRef} />
+            </div>
+
+            <form onSubmit={(e) => void handleSendChatMessage(e)} className="fashionBotInputArea">
+              {selectedImage ? (
+                <div className="fashionBotInputArea__preview">
+                  <img src={selectedImage} alt="Preview" />
+                  <button type="button" className="fashionBotInputArea__previewRemove" onClick={() => setSelectedImage(null)}>
+                    ✕
+                  </button>
+                </div>
+              ) : null}
+              <div className="fashionBotInputRow">
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  style={{ display: "none" }}
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                />
+                <button
+                  type="button"
+                  className="fashionBotInputRow__attach"
+                  onClick={() => fileInputRef.current?.click()}
+                  aria-label="Upload photo"
+                >
+                  📷
+                </button>
+                <input
+                  type="text"
+                  placeholder="Ask for style tips, outfit matches..."
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  className="fashionBotInputRow__input"
+                />
+                <button type="submit" className="fashionBotInputRow__send" aria-label="Send">
+                  Send
+                </button>
+              </div>
+            </form>
+          </div>
+        ) : null}
+
+        <button
+          type="button"
+          className="fashionBotToggleBtn"
+          onClick={() => setChatOpen((prev) => !prev)}
+          aria-label="Toggle AI Stylist"
+        >
+          {chatOpen ? "✕" : "✨ Stylist"}
+        </button>
+      </div>
     </div>
   );
 }
